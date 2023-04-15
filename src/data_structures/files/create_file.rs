@@ -7,7 +7,7 @@ pub enum FileType {
     File,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum IfNameExists {
     #[default]
@@ -189,7 +189,7 @@ pub struct MatchPreHashResponse {
 }
 
 impl MatchPreHashResponse {
-    fn matched(&self) -> bool {
+    pub fn matched(&self) -> bool {
         self.code.as_str() == "PreHashMatched" && self.message.as_str() == "Pre hash matched."
     }
 }
@@ -213,6 +213,10 @@ pub enum CreateFileResponse {
         location: String,
         #[serde(flatten)]
         _base: BaseCreationResponse,
+    },
+    PreHashMatched {
+        #[serde(flatten)]
+        _base: MatchPreHashResponse,
     },
 }
 

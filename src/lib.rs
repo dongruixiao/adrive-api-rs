@@ -1,6 +1,9 @@
 #![allow(dead_code)]
 
+use std::any;
+use std::borrow::Borrow;
 use std::fs::File;
+use std::future::Future;
 use std::{cmp::min, io::SeekFrom};
 
 use anyhow::{self, Ok};
@@ -10,6 +13,7 @@ pub mod constants;
 pub mod data_structures;
 pub mod utils;
 
+use async_recursion::async_recursion;
 use base64::engine::{general_purpose, Engine};
 use constants::{ADRIVE_BASE_URI, HTTPCLIENT};
 use data_structures::files::create_file::{CompleteFileRequest, CompleteFileResponse};
@@ -19,9 +23,8 @@ use data_structures::files::{
 };
 use data_structures::files::{MatchPreHashRequest, MatchPreHashResponse};
 use objects::{
-    Album, AlbumPayload, Capacity, CapacityPayload, Config, Credentials,
-    Directory, FileExistsPayload, ListDirPayload, SafeBox, SafeBoxPayload,
-    UserInfo, UserInfoPayload,
+    Album, AlbumPayload, Capacity, CapacityPayload, Config, Credentials, Directory,
+    FileExistsPayload, ListDirPayload, SafeBox, SafeBoxPayload, UserInfo, UserInfoPayload,
 };
 use reqwest::Url;
 use serde::{de::DeserializeOwned, Serialize};
@@ -40,6 +43,7 @@ const ADRIVE_COMPLETE_FILE: &str = "v2/file/complete";
 const FILE_SIZE_HASH_LIMIT: u64 = 1024 * 1000;
 const DEFAULT_PART_SIZE: u64 = 1024 * 1024 * 10; // 10MB
 
+#[derive(Clone, Debug)]
 pub struct ADriveAPI {
     pub credentials: Credentials,
     pub config: Option<Config>,
@@ -107,7 +111,7 @@ impl ADriveAPI {
     /// multi files
     pub async fn exists(&mut self, parent_id: String, file_name: String) -> anyhow::Result<bool> {
         let url = Self::join_url(ADRIVE_FILE_EXISTS, None)?;
-        let drive_id = self.credentials.drive_id.clone().to_string();
+        let drive_id = self.credentials.drive_id.clone();
         let payload = FileExistsPayload::new(drive_id, parent_id, file_name);
         let resp: Directory = self.request(url, payload).await?;
         if resp.items.len() > 0 {
@@ -185,20 +189,45 @@ impl ADriveAPI {
         Ok(s.digest().to_string())
     }
 
-    async fn single_part_upload(&mut self, url: &str, data: Vec<u8>) -> anyhow::Result<()> {
-        let url = Url::parse(url)?;
-        self.credentials.refresh_if_needed().await?;
-        HTTPCLIENT
+    async fn single_part_upload(
+        url: String,
+        data: Vec<u8>,
+        size: usize,
+        access_token: String,
+    ) -> anyhow::Result<()> {
+        let url = Url::parse(&url)?;
+        let resp = HTTPCLIENT
             .put(url)
             .body(data)
-            .bearer_auth(&self.credentials.access_token)
+            .bearer_auth(&access_token)
+            .header("content-length", size)
             .send()
             .await?;
         Ok(())
     }
 
-    async fn parallel_multipart_upload(&mut self, file: &mut File, part_info_list: Vec<PartInfo>) {
-        todo!()
+    async fn multipart_upload_concurrency(
+        &mut self,
+        file: &mut File,
+        part_info_list: Vec<PartInfo>,
+    ) -> anyhow::Result<()> {
+        // let mut tasks = Vec::with_capacity(part_info_list.len());
+        for part_info in part_info_list.iter() {
+            let mut buf: Vec<u8> = vec![0u8; DEFAULT_PART_SIZE as usize];
+            let size = file.read(&mut buf)?;
+            if let Some(url) = part_info.upload_url.to_owned() {
+                buf.truncate(size);
+                self.credentials.refresh_if_needed().await?;
+                let ak = self.credentials.access_token.to_owned();
+                // let fut = tokio::spawn(Self::single_part_upload(url, buf, size, ak));
+                Self::single_part_upload(url, buf, size, ak).await?;
+                // tasks.push(fut);
+            }
+        }
+        // for task in tasks {
+        //     task.await?;
+        // }
+        Ok(())
     }
 
     async fn complete_multipart_upload(
@@ -225,7 +254,7 @@ impl ADriveAPI {
         name: &str,
         if_name_exists: Option<IfNameExists>,
         size: u64,
-    ) -> anyhow::Result<MatchPreHashResponse> {
+    ) -> anyhow::Result<CreateFileResponse> {
         let pre_hash = Self::get_pre_hash(name)?;
         let part_info_list = Self::get_part_info_list(size);
         let payload = MatchPreHashRequest::new(
@@ -239,7 +268,7 @@ impl ADriveAPI {
             None,
             &pre_hash,
         );
-        let resp: MatchPreHashResponse = self.request(url, payload).await?;
+        let resp: CreateFileResponse = self.request(url, payload).await?;
         Ok(resp)
     }
 
@@ -255,7 +284,6 @@ impl ADriveAPI {
         let part_info_list = Self::get_part_info_list(size);
         let content_hash = Self::get_content_hash(name)?;
         let proof_code = Self::get_proof_code(name, size, &self.credentials.access_token)?;
-
         let payload = CreateFileRequest::new(
             &drive_id,
             parent_id,
@@ -274,77 +302,161 @@ impl ADriveAPI {
         Ok(resp)
     }
 
-    // async fn create_file_response(
-    //     &self,
-    //     url: Url,
-    //     drive_id: &str,
-    //     parent_id: &str,
-    //     name: &str,
-    //     if_name_exists: Option<IfNameExists>,
-    //     size: u64,
-    // ) -> anyhow::Result<CreateFileResponse> {
-    //     let resp = self
-    //         .check_content_hash(url, drive_id, parent_id, name, if_name_exists, size)
-    //         .await?;
-    //     match &resp {
-    //         CreateFileResponse::File {
-    //             part_info_list,
-    //             upload_id,
-    //             rapid_upload,
-    //             revision_id,
-    //             location,
-    //             _base,
-    //         } => {
-    //             todo!()
-    //         }
-    //         CreateFileResponse::RapidFile {
-    //             upload_id,
-    //             rapid_upload,
-    //             revision_id,
-    //             location,
-    //             _base,
-    //         } => {
-    //             todo!()
-    //         }
-    //     }
-    // }
-    // pub async fn create_file(
-    //     &mut self,
-    //     parent_id: &str,
-    //     name: &str,
-    //     if_name_exists: Option<IfNameExists>,
-    // ) -> anyhow::Result<CreateFileResponse> {
-    //     /// 小于 limit 的文件直接走 createFileRequest 请求，之后返回 createFileResponse 来决定是否要上传，
-    //     ///
-    //     let url = Self::join_url(ADRIVE_CREATE_FOLDER, None)?;
-    //     let drive_id = self.credentials.drive_id.to_string();
+    #[async_recursion]
+    pub async fn upload_file(
+        &mut self,
+        parent_id: &str,
+        name: &str,
+        if_name_exists: Option<IfNameExists>,
+        skip_match_pre_hash: Option<bool>,
+    ) -> anyhow::Result<()> {
+        let url = Self::join_url(ADRIVE_CREATE_FOLDER, None)?;
+        let drive_id = self.credentials.drive_id.to_string();
 
-    //     let size = File::open(name)?.metadata()?.len();
-    //     let part_info_list = Self::get_part_info_list(size);
-    //     let content_hash = Self::get_content_hash(name)?;
-    //     let proof_code = Self::get_proof_code(name, size, &self.credentials.access_token)?;
+        let size = File::open(name)?.metadata()?.len();
+        let part_info_list = Self::get_part_info_list(size);
+        let content_hash = Self::get_content_hash(name)?;
+        let proof_code = Self::get_proof_code(name, size, &self.credentials.access_token)?;
 
-    //     if size < FILE_SIZE_HASH_LIMIT {
-    //         let resp = self
-    //             .create_file_response(url, &drive_id, parent_id, name, if_name_exists, size)
-    //             .await?;
-    //         return Ok(resp);
-    //     }
-    //     let resp = self
-    //         .check_pre_hash(url, &drive_id, parent_id, name, if_name_exists, size)
-    //         .await?;
-
-    //     if resp.matched() {
-    //         let resp = self
-    //             .check_content_hash(url, &drive_id, parent_id, name, if_name_exists, size)
-    //             .await?;
-    //         return Ok(resp);
-    //     }
-    //     let resp = self
-    //         .check_content_hash(url, &drive_id, parent_id, name, if_name_exists, size)
-    //         .await?;
-    //     Ok(resp)
-    // }
+        if size < FILE_SIZE_HASH_LIMIT {
+            let payload = CreateFileRequest::new(
+                &drive_id,
+                parent_id,
+                name,
+                if_name_exists.clone(),
+                size,
+                part_info_list,
+                None,
+                None,
+                &content_hash,
+                None,
+                &proof_code,
+                None,
+            );
+            let resp = self.request(url, payload).await?;
+            match resp {
+                CreateFileResponse::File {
+                    part_info_list,
+                    upload_id,
+                    rapid_upload,
+                    revision_id,
+                    location,
+                    _base,
+                } => {
+                    let mut file = File::open(name)?;
+                    let ret = self
+                        .multipart_upload_concurrency(&mut file, part_info_list)
+                        .await?;
+                    self.complete_multipart_upload(&upload_id, &_base.file_id)
+                        .await?;
+                    return Ok(());
+                }
+                CreateFileResponse::RapidFile {
+                    upload_id,
+                    rapid_upload,
+                    revision_id,
+                    location,
+                    _base,
+                } => {
+                    return Ok(());
+                }
+                _ => {
+                    // error
+                    todo!()
+                }
+            }
+        }
+        let pre_hash = Self::get_pre_hash(name)?;
+        let skip_match_pre_hash = skip_match_pre_hash.unwrap_or(false);
+        if !skip_match_pre_hash {
+            let payload = MatchPreHashRequest::new(
+                &drive_id,
+                parent_id,
+                name,
+                if_name_exists.clone(),
+                size,
+                part_info_list,
+                None,
+                None,
+                &pre_hash,
+            );
+            let resp: CreateFileResponse = self.request(url, payload).await?;
+            match resp {
+                CreateFileResponse::File {
+                    part_info_list,
+                    upload_id,
+                    rapid_upload,
+                    revision_id,
+                    location,
+                    _base,
+                } => {
+                    let mut file = File::open(name)?;
+                    let res = self
+                        .multipart_upload_concurrency(&mut file, part_info_list)
+                        .await?;
+                    let res = self
+                        .complete_multipart_upload(&upload_id, &_base.file_id)
+                        .await?;
+                    return Ok(());
+                }
+                CreateFileResponse::PreHashMatched { _base } => {
+                    let res = self
+                        .upload_file(parent_id, name, if_name_exists.clone(), Some(true))
+                        .await?;
+                    return Ok(res);
+                }
+                _ => {
+                    todo!()
+                }
+            }
+        } else {
+            let payload = CreateFileRequest::new(
+                &drive_id,
+                parent_id,
+                name,
+                if_name_exists,
+                size,
+                part_info_list,
+                None,
+                None,
+                &content_hash,
+                None,
+                &proof_code,
+                None,
+            );
+            let resp: CreateFileResponse = self.request(url, payload).await?;
+            match resp {
+                CreateFileResponse::File {
+                    part_info_list,
+                    upload_id,
+                    rapid_upload,
+                    revision_id,
+                    location,
+                    _base,
+                } => {
+                    let mut file = File::open(name)?;
+                    let res = self
+                        .multipart_upload_concurrency(&mut file, part_info_list)
+                        .await?;
+                    self.complete_multipart_upload(&upload_id, &_base.file_id)
+                        .await?;
+                    return Ok(());
+                }
+                CreateFileResponse::RapidFile {
+                    upload_id,
+                    rapid_upload,
+                    revision_id,
+                    location,
+                    _base,
+                } => {
+                    return Ok(());
+                }
+                _ => {
+                    todo!()
+                }
+            }
+        }
+    }
 
     fn join_url(sub_url: &str, base_url: Option<&str>) -> anyhow::Result<Url> {
         let root_url: &str;
@@ -366,7 +478,7 @@ impl ADriveAPI {
         let resp = HTTPCLIENT
             .post(url)
             .json(&payload)
-            .bearer_auth(&self.credentials.access_token)
+            .bearer_auth(&mut self.credentials.access_token)
             .send()
             .await?
             .json::<D>()
@@ -375,38 +487,3 @@ impl ADriveAPI {
         Ok(resp)
     }
 }
-
-// #[tokio::test]
-// async fn test_user_info() {
-//     let mut api = ADriveAPI::new();
-//     // let user = api.user_info().await.unwrap();
-//     // let cap = api.capacity().await.unwrap();
-//     // let album = api.album().await.unwrap();
-//     // let sbox = api.safebox().await.unwrap();
-//     // let list = api
-//     //     .exists("root".to_string(), "4988_5_31INsypx64pzIbXI-a480.jpeg".to_string())
-//     //     .await
-//     //     .unwrap();
-//     // println!("{:#?}", user);
-//     // println!("{:#?}", cap);
-//     // println!("{:#?}", album);
-//     // println!("{:#?}", sbox);
-
-//     // let resp = api.create_file("root", "Cargo.lock", None).await.unwrap();
-//     // print!("{:#?}", resp);
-
-//     // let ret = api.listdir("root", 100).await.unwrap();
-//     // let ret = api
-//     //     .create_file(
-//     //         String::from("root"),
-//     //         String::from("/Users/dongruixiao/Desktop/4988_5_31INsypx64pzIbXI-a480.jpeg"),
-//     //         // String::from("/Users/dongruixiao/Desktop/a.txt"),
-//     //     )
-//     //     .await
-//     //     .unwrap();
-//     // println!("{:#?}", ret);
-//     // println!("{}", ret);
-//     // println!("{:#?}", folder.common.drive_id);
-//     // println!("{:#?}", folder);
-//     // println!("{:#?}", api.config);
-// }
