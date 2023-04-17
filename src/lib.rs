@@ -16,12 +16,16 @@ pub mod utils;
 use async_recursion::async_recursion;
 use base64::engine::{general_purpose, Engine};
 use constants::{ADRIVE_BASE_URI, HTTPCLIENT};
-use data_structures::files::create_file::{CompleteFileRequest, CompleteFileResponse};
+use data_structures::files::create::{CompleteFileRequest, CompleteFileResponse};
 use data_structures::files::{
-    create_file::PartInfo, CreateDirRequest, CreateDirResponse, CreateFileRequest,
-    CreateFileResponse, IfNameExists,
+    create::PartInfo, CreateDirRequest, CreateDirResponse, CreateFileRequest, CreateFileResponse,
+    IfNameExists,
 };
-use data_structures::files::{MatchPreHashRequest, MatchPreHashResponse};
+use data_structures::files::{
+    DownloadFileRequest, DownloadFileResponse, MatchPreHashRequest, MatchPreHashResponse,
+};
+
+use futures_util::StreamExt;
 use objects::{
     Album, AlbumPayload, Capacity, CapacityPayload, Config, Credentials, Directory,
     FileExistsPayload, ListDirPayload, SafeBox, SafeBoxPayload, UserInfo, UserInfoPayload,
@@ -29,7 +33,7 @@ use objects::{
 use reqwest::Url;
 use serde::{de::DeserializeOwned, Serialize};
 use sha1_smol::Sha1;
-use std::io::{Read, Seek};
+use std::io::{Read, Seek, Write};
 
 const ADRIVE_USER_INFO_API: &str = "adrive/v2/user/get";
 const ADRIVE_CAPACITY_API: &str = "adrive/v1/user/driveCapacityDetails";
@@ -39,6 +43,7 @@ const ADRIVE_LIST_DIR_API: &str = "adrive/v3/file/list";
 const ADRIVE_FILE_EXISTS: &str = "adrive/v3/file/search";
 const ADRIVE_CREATE_FOLDER: &str = "adrive/v2/file/createWithFolders";
 const ADRIVE_COMPLETE_FILE: &str = "v2/file/complete";
+const ADRIVE_DOWNLOAD_FILE: &str = "/v2/file/get_download_url";
 
 const FILE_SIZE_HASH_LIMIT: u64 = 1024 * 1000;
 const DEFAULT_PART_SIZE: u64 = 1024 * 1024 * 10; // 10MB
@@ -456,6 +461,28 @@ impl ADriveAPI {
                 }
             }
         }
+    }
+
+    pub async fn download_file(&mut self, file_id: &str, dst_path: &str) -> anyhow::Result<()> {
+        let url = Self::join_url(ADRIVE_DOWNLOAD_FILE, None)?;
+        // let drive_id = self.credentials.drive_id.as_str();
+        let payload = DownloadFileRequest::new(file_id, file_id);
+        //FIXME
+        // Object {
+        //     "code": String("UserDeviceIllegality"),
+        //     "message": String("invalid X-Device-Id"),
+        // }
+        let resp: DownloadFileResponse = self.request(url, payload).await?;
+
+        // let access_token = self.credentials.access_token.as_str();
+
+        let mut stream = HTTPCLIENT.get(resp.url).send().await?.bytes_stream();
+        let mut file = File::create(dst_path)?;
+
+        while let Some(chunk) = stream.next().await {
+            file.write(&chunk?)?;
+        }
+        Ok(())
     }
 
     fn join_url(sub_url: &str, base_url: Option<&str>) -> anyhow::Result<Url> {
