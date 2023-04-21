@@ -465,18 +465,31 @@ impl ADriveAPI {
 
     pub async fn download_file(&mut self, file_id: &str, dst_path: &str) -> anyhow::Result<()> {
         let url = Self::join_url(ADRIVE_DOWNLOAD_FILE, None)?;
-        // let drive_id = self.credentials.drive_id.as_str();
-        let payload = DownloadFileRequest::new(file_id, file_id);
+        let drive_id = self.credentials.drive_id.clone();
+        let payload = DownloadFileRequest::new(&drive_id, file_id);
         //FIXME
         // Object {
         //     "code": String("UserDeviceIllegality"),
         //     "message": String("invalid X-Device-Id"),
         // }
         let resp: DownloadFileResponse = self.request(url, payload).await?;
+        // println!("{:?}", payload);
+        // let resp: serde_json::Value = self.request(url, payload).await?;
+        println!("{:?}", resp);
 
-        // let access_token = self.credentials.access_token.as_str();
+        // let access_token self.credentials.access_token.as_str();
 
-        let mut stream = HTTPCLIENT.get(resp.url).send().await?.bytes_stream();
+        let mut stream = HTTPCLIENT
+            .get(resp.url)
+            // .header("x-device-id", "")
+            // .header("x-signature", "")
+            // .header("x-canary", "client=web,app=adrive,version=v4.2.0")
+            // .header("origin", "https://www.aliyundrive.com")
+            // .header("referer","https://www.aliyundrive.com/")
+            // .header("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36 Edg/110.0.1587.41")
+            .send()
+            .await?
+            .bytes_stream();
         let mut file = File::create(dst_path)?;
 
         while let Some(chunk) = stream.next().await {
@@ -504,8 +517,16 @@ impl ADriveAPI {
         self.credentials.refresh_if_needed().await?;
         let resp = HTTPCLIENT
             .post(url)
+            // # TODO invalid X-Device-Id
+            // .header("x-device-id", "")
+            // .header("x-signature", "")
+            // .header("x-canary", "client=web,app=adrive,version=v4.2.0")
+            // .header("origin", "https://www.aliyundrive.com")
+            // .header("referer","https://www.aliyundrive.com/")
+            // .header("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36 Edg/110.0.1587.41")
             .json(&payload)
             .bearer_auth(&mut self.credentials.access_token)
+            // .bearer_auth(access_token)
             .send()
             .await?
             .json::<D>()

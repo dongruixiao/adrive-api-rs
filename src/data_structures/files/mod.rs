@@ -1,5 +1,6 @@
 pub mod create;
 pub mod download;
+pub mod remove;
 
 pub use create::{
     CreateDirRequest, CreateDirResponse, CreateFileRequest, CreateFileResponse, IfNameExists,
