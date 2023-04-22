@@ -1,3 +1,5 @@
+use std::vec;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Debug)]
@@ -36,7 +38,7 @@ impl<'a> MoveFileRequest<'a> {
         to_drive_id: &'a str,
         to_parent_file_id: &'a str,
     ) -> Self {
-        let requests = vec![Request {
+        let request = Request {
             body: RequestBody {
                 drive_id,
                 file_id,
@@ -49,9 +51,9 @@ impl<'a> MoveFileRequest<'a> {
             id: file_id,
             method: "POST",
             url: "/file/move",
-        }];
+        };
         Self {
-            requests,
+            requests: vec![request],
             resource: "file",
         }
     }
