@@ -22,6 +22,7 @@ use data_structures::files::{
     DownloadFileRequest, DownloadFileResponse, IfNameExists, MatchPreHashRequest, MoveFileRequest,
     MoveFileResponse, RemoveFileRequest, RemoveFileResponse,
 };
+use data_structures::files::{StarredFileRequest, StarredFileResponse};
 use futures_util::StreamExt;
 use objects::{
     Album, AlbumPayload, Capacity, CapacityPayload, Config, Credentials, Directory,
@@ -43,6 +44,7 @@ const ADRIVE_COMPLETE_FILE: &str = "v2/file/complete";
 const ADRIVE_DOWNLOAD_FILE: &str = "v2/file/get_download_url";
 const ADRIVE_REMOVE_FILE: &str = "v2/batch";
 const ADRIVE_MOVE_FILE: &str = "v3/batch";
+const ADRIVE_STARRED_FILE: &str = "v2/batch";
 
 const FILE_SIZE_HASH_LIMIT: u64 = 1024 * 1000;
 const DEFAULT_PART_SIZE: u64 = 1024 * 1024 * 10; // 10MB
@@ -517,6 +519,23 @@ impl ADriveAPI {
         let url = Self::join_url(ADRIVE_MOVE_FILE, None)?;
         let drive_id = self.credentials.drive_id.clone();
         let payload = MoveFileRequest::new(&drive_id, file_id, &drive_id, parent_file_id);
+        let resp = self.request(url, payload).await?;
+        Ok(resp)
+    }
+
+    pub async fn starred_file(&mut self, file_id: &str) -> anyhow::Result<StarredFileResponse> {
+        let url = Self::join_url(ADRIVE_STARRED_FILE, None)?;
+        let drive_id = self.credentials.drive_id.clone();
+        let payload = StarredFileRequest::new(&drive_id, file_id, true);
+        println!("{:?}", payload);
+        let resp = self.request(url, payload).await?;
+        Ok(resp)
+    }
+
+    pub async fn unstarred_file(&mut self, file_id: &str) -> anyhow::Result<StarredFileResponse> {
+        let url = Self::join_url(ADRIVE_STARRED_FILE, None)?;
+        let drive_id = self.credentials.drive_id.clone();
+        let payload = StarredFileRequest::new(&drive_id, file_id, false);
         let resp = self.request(url, payload).await?;
         Ok(resp)
     }

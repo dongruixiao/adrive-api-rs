@@ -78,11 +78,11 @@ pub struct StarredResponseBody {
     download_url: String,
     content_hash: String,
     revision_id: String,
-    thumbnail: String,
+    thumbnail: Option<String>,
     creator_type: String,
     drive_id: String,
     punish_flag: u32,
-    revision_version: String,
+    revision_version: u32,
     url: String,
     user_tags: UserTag,
     size: u64,
@@ -100,11 +100,11 @@ pub struct StarredResponseBody {
 #[derive(Deserialize, Debug)]
 pub struct StarredResponse {
     body: StarredResponseBody,
+    id: String,
+    status: u16,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct StarredFileResponse {
     responses: Vec<StarredResponse>,
-    id: String,
-    status: u16,
 }
