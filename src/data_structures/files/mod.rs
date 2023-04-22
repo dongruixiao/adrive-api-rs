@@ -1,6 +1,7 @@
 pub mod create;
 pub mod download;
 pub mod remove;
+pub mod r#move;
 
 pub use create::{
     CreateDirRequest, CreateDirResponse, CreateFileRequest, CreateFileResponse, IfNameExists,
@@ -8,3 +9,4 @@ pub use create::{
 };
 pub use download::{DownloadFileRequest, DownloadFileResponse};
 pub use remove::{RemoveFileRequest, RemoveFileResponse};
+pub use r#move::{MoveFileRequest, MoveFileResponse};

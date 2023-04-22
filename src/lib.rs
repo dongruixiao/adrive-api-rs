@@ -19,13 +19,9 @@ use constants::{ADRIVE_BASE_URI, HTTPCLIENT};
 use data_structures::files::create::{CompleteFileRequest, CompleteFileResponse};
 use data_structures::files::{
     create::PartInfo, CreateDirRequest, CreateDirResponse, CreateFileRequest, CreateFileResponse,
-    IfNameExists,
+    DownloadFileRequest, DownloadFileResponse, IfNameExists, MatchPreHashRequest, MoveFileRequest,
+    MoveFileResponse, RemoveFileRequest, RemoveFileResponse,
 };
-use data_structures::files::{
-    DownloadFileRequest, DownloadFileResponse, MatchPreHashRequest, MatchPreHashResponse,
-    RemoveFileResponse,
-};
-
 use futures_util::StreamExt;
 use objects::{
     Album, AlbumPayload, Capacity, CapacityPayload, Config, Credentials, Directory,
@@ -35,8 +31,6 @@ use reqwest::Url;
 use serde::{de::DeserializeOwned, Serialize};
 use sha1_smol::Sha1;
 use std::io::{Read, Seek, Write};
-
-use crate::data_structures::files::RemoveFileRequest;
 
 const ADRIVE_USER_INFO_API: &str = "adrive/v2/user/get";
 const ADRIVE_CAPACITY_API: &str = "adrive/v1/user/driveCapacityDetails";
@@ -48,6 +42,7 @@ const ADRIVE_CREATE_FOLDER: &str = "adrive/v2/file/createWithFolders";
 const ADRIVE_COMPLETE_FILE: &str = "v2/file/complete";
 const ADRIVE_DOWNLOAD_FILE: &str = "v2/file/get_download_url";
 const ADRIVE_REMOVE_FILE: &str = "v2/batch";
+const ADRIVE_MOVE_FILE: &str = "v3/batch";
 
 const FILE_SIZE_HASH_LIMIT: u64 = 1024 * 1000;
 const DEFAULT_PART_SIZE: u64 = 1024 * 1024 * 10; // 10MB
@@ -511,6 +506,18 @@ impl ADriveAPI {
         let payload = RemoveFileRequest::new(&drive_id, file_ids);
         let resp = self.request(url, payload).await?;
         // TODO need to check after remove?
+        Ok(resp)
+    }
+
+    pub async fn move_file(
+        &mut self,
+        file_id: &str,
+        parent_file_id: &str,
+    ) -> anyhow::Result<MoveFileResponse> {
+        let url = Self::join_url(ADRIVE_MOVE_FILE, None)?;
+        let drive_id = self.credentials.drive_id.clone();
+        let payload = MoveFileRequest::new(&drive_id, file_id, &drive_id, parent_file_id);
+        let resp = self.request(url, payload).await?;
         Ok(resp)
     }
 
