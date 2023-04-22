@@ -22,18 +22,39 @@ struct Request<'a> {
 }
 
 #[derive(Serialize, Debug)]
-struct RemoveFileRequest<'a> {
+pub struct RemoveFileRequest<'a> {
     requests: Vec<Request<'a>>,
     resource: &'a str,
 }
 
-#[derive(Deserialize, Debug)]
-struct Response {
-    id: String,
-    status: u16,
+impl<'a> RemoveFileRequest<'a> {
+    pub fn new(drive_id: &'a str, file_ids: Vec<&'a str>) -> Self {
+        let requests = file_ids
+            .into_iter()
+            .map(|file_id| Request {
+                body: Body { drive_id, file_id },
+                headers: Headers {
+                    content_type: "application/json",
+                },
+                id: file_id,
+                method: "POST",
+                url: "/recyclebin/trash",
+            })
+            .collect();
+        Self {
+            requests,
+            resource: "file",
+        }
+    }
 }
 
 #[derive(Deserialize, Debug)]
-struct RemoveFileResponse {
-    responses: Vec<Response>,
+pub struct Response {
+    pub id: String,
+    pub status: u16,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct RemoveFileResponse {
+    pub responses: Vec<Response>,
 }

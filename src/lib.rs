@@ -23,6 +23,7 @@ use data_structures::files::{
 };
 use data_structures::files::{
     DownloadFileRequest, DownloadFileResponse, MatchPreHashRequest, MatchPreHashResponse,
+    RemoveFileResponse,
 };
 
 use futures_util::StreamExt;
@@ -35,6 +36,8 @@ use serde::{de::DeserializeOwned, Serialize};
 use sha1_smol::Sha1;
 use std::io::{Read, Seek, Write};
 
+use crate::data_structures::files::RemoveFileRequest;
+
 const ADRIVE_USER_INFO_API: &str = "adrive/v2/user/get";
 const ADRIVE_CAPACITY_API: &str = "adrive/v1/user/driveCapacityDetails";
 const ADRIVE_SAFEBOX_API: &str = "v2/sbox/get";
@@ -43,7 +46,8 @@ const ADRIVE_LIST_DIR_API: &str = "adrive/v3/file/list";
 const ADRIVE_FILE_EXISTS: &str = "adrive/v3/file/search";
 const ADRIVE_CREATE_FOLDER: &str = "adrive/v2/file/createWithFolders";
 const ADRIVE_COMPLETE_FILE: &str = "v2/file/complete";
-const ADRIVE_DOWNLOAD_FILE: &str = "/v2/file/get_download_url";
+const ADRIVE_DOWNLOAD_FILE: &str = "v2/file/get_download_url";
+const ADRIVE_REMOVE_FILE: &str = "v2/batch";
 
 const FILE_SIZE_HASH_LIMIT: u64 = 1024 * 1000;
 const DEFAULT_PART_SIZE: u64 = 1024 * 1024 * 10; // 10MB
@@ -496,6 +500,18 @@ impl ADriveAPI {
             file.write(&chunk?)?;
         }
         Ok(())
+    }
+
+    pub async fn remove_files(
+        &mut self,
+        file_ids: Vec<&str>,
+    ) -> anyhow::Result<RemoveFileResponse> {
+        let url = Self::join_url(ADRIVE_REMOVE_FILE, None)?;
+        let drive_id = self.credentials.drive_id.clone();
+        let payload = RemoveFileRequest::new(&drive_id, file_ids);
+        let resp = self.request(url, payload).await?;
+        // TODO need to check after remove?
+        Ok(resp)
     }
 
     fn join_url(sub_url: &str, base_url: Option<&str>) -> anyhow::Result<Url> {

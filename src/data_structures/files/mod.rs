@@ -7,3 +7,4 @@ pub use create::{
     MatchPreHashRequest, MatchPreHashResponse,
 };
 pub use download::{DownloadFileRequest, DownloadFileResponse};
+pub use remove::{RemoveFileRequest, RemoveFileResponse};
