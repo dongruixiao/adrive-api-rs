@@ -23,6 +23,7 @@ use data_structures::files::{
     MoveFileResponse, RemoveFileRequest, RemoveFileResponse,
 };
 use data_structures::files::{StarredFileRequest, StarredFileResponse};
+use data_structures::session::{CreateSessionRequest, RenewSessionRequest, SessionResponse};
 use futures_util::StreamExt;
 use objects::{
     Album, AlbumPayload, Capacity, CapacityPayload, Config, Credentials, Directory,
@@ -45,6 +46,8 @@ const ADRIVE_DOWNLOAD_FILE: &str = "v2/file/get_download_url";
 const ADRIVE_REMOVE_FILE: &str = "v2/batch";
 const ADRIVE_MOVE_FILE: &str = "v3/batch";
 const ADRIVE_STARRED_FILE: &str = "v2/batch";
+const ADRIVE_CREATE_SESSION: &str = "users/v1/users/device/create_session";
+const ADRIVE_RENEW_SESSION: &str = "users/v1/users/device/renew_session";
 
 const FILE_SIZE_HASH_LIMIT: u64 = 1024 * 1000;
 const DEFAULT_PART_SIZE: u64 = 1024 * 1024 * 10; // 10MB
@@ -66,28 +69,28 @@ impl ADriveAPI {
     pub async fn user_info(&mut self) -> anyhow::Result<UserInfo> {
         let url = Self::join_url(ADRIVE_USER_INFO_API, None)?;
         let payload = UserInfoPayload {};
-        let resp = self.request(url, payload).await?;
+        let resp = self.request(url, payload, None).await?;
         Ok(resp)
     }
 
     pub async fn capacity(&mut self) -> anyhow::Result<Capacity> {
         let url = Self::join_url(ADRIVE_CAPACITY_API, None)?;
         let payload = CapacityPayload {};
-        let resp = self.request(url, payload).await?;
+        let resp = self.request(url, payload, None).await?;
         Ok(resp)
     }
 
     pub async fn safebox(&mut self) -> anyhow::Result<SafeBox> {
         let url = Self::join_url(ADRIVE_SAFEBOX_API, None)?;
         let payload = SafeBoxPayload {};
-        let resp = self.request(url, payload).await?;
+        let resp = self.request(url, payload, None).await?;
         Ok(resp)
     }
 
     pub async fn album(&mut self) -> anyhow::Result<Album> {
         let url = Self::join_url(ADRIVE_ALBUM_API, None)?;
         let payload = AlbumPayload {};
-        let resp = self.request(url, payload).await?;
+        let resp = self.request(url, payload, None).await?;
         Ok(resp)
     }
 
@@ -95,7 +98,7 @@ impl ADriveAPI {
         let url = Self::join_url(ADRIVE_LIST_DIR_API, None)?;
         let drive_id = self.credentials.drive_id.clone();
         let payload = ListDirPayload::new(&drive_id, parent_id, limit);
-        let resp = self.request(url, payload).await?;
+        let resp = self.request(url, payload, None).await?;
         Ok(resp)
     }
 
@@ -119,7 +122,7 @@ impl ADriveAPI {
         let url = Self::join_url(ADRIVE_FILE_EXISTS, None)?;
         let drive_id = self.credentials.drive_id.clone();
         let payload = FileExistsPayload::new(drive_id, parent_id, file_name);
-        let resp: Directory = self.request(url, payload).await?;
+        let resp: Directory = self.request(url, payload, None).await?;
         if resp.items.len() > 0 {
             return Ok(true);
         }
@@ -135,7 +138,7 @@ impl ADriveAPI {
         let drive_id = self.credentials.drive_id.to_owned();
         let payload: CreateDirRequest =
             CreateDirRequest::new(&drive_id, parent_id, name, if_name_exists);
-        let resp: CreateDirResponse = self.request(url, payload).await?;
+        let resp: CreateDirResponse = self.request(url, payload, None).await?;
         Ok(resp)
     }
 
@@ -248,7 +251,7 @@ impl ADriveAPI {
             upload_id,
             file_id,
         };
-        let resp: CompleteFileResponse = self.request(url, payload).await?;
+        let resp: CompleteFileResponse = self.request(url, payload, None).await?;
         Ok(resp)
     }
 
@@ -274,7 +277,7 @@ impl ADriveAPI {
             None,
             &pre_hash,
         );
-        let resp: CreateFileResponse = self.request(url, payload).await?;
+        let resp: CreateFileResponse = self.request(url, payload, None).await?;
         Ok(resp)
     }
 
@@ -304,7 +307,7 @@ impl ADriveAPI {
             &proof_code,
             None,
         );
-        let resp: CreateFileResponse = self.request(url, payload).await?;
+        let resp: CreateFileResponse = self.request(url, payload, None).await?;
         Ok(resp)
     }
 
@@ -339,7 +342,7 @@ impl ADriveAPI {
                 &proof_code,
                 None,
             );
-            let resp = self.request(url, payload).await?;
+            let resp = self.request(url, payload, None).await?;
             match resp {
                 CreateFileResponse::File {
                     part_info_list,
@@ -386,7 +389,7 @@ impl ADriveAPI {
                 None,
                 &pre_hash,
             );
-            let resp: CreateFileResponse = self.request(url, payload).await?;
+            let resp: CreateFileResponse = self.request(url, payload, None).await?;
             match resp {
                 CreateFileResponse::File {
                     part_info_list,
@@ -430,7 +433,7 @@ impl ADriveAPI {
                 &proof_code,
                 None,
             );
-            let resp: CreateFileResponse = self.request(url, payload).await?;
+            let resp: CreateFileResponse = self.request(url, payload, None).await?;
             match resp {
                 CreateFileResponse::File {
                     part_info_list,
@@ -473,9 +476,9 @@ impl ADriveAPI {
         //     "code": String("UserDeviceIllegality"),
         //     "message": String("invalid X-Device-Id"),
         // }
-        let resp: DownloadFileResponse = self.request(url, payload).await?;
+        let resp: DownloadFileResponse = self.request(url, payload, None).await?;
         // println!("{:?}", payload);
-        // let resp: serde_json::Value = self.request(url, payload).await?;
+        // let resp: serde_json::Value = self.request(url, payload, None).await?;
         println!("{:?}", resp);
 
         // let access_token self.credentials.access_token.as_str();
@@ -506,7 +509,7 @@ impl ADriveAPI {
         let url = Self::join_url(ADRIVE_REMOVE_FILE, None)?;
         let drive_id = self.credentials.drive_id.clone();
         let payload = RemoveFileRequest::new(&drive_id, file_ids);
-        let resp = self.request(url, payload).await?;
+        let resp = self.request(url, payload, None).await?;
         // TODO need to check after remove?
         Ok(resp)
     }
@@ -519,7 +522,7 @@ impl ADriveAPI {
         let url = Self::join_url(ADRIVE_MOVE_FILE, None)?;
         let drive_id = self.credentials.drive_id.clone();
         let payload = MoveFileRequest::new(&drive_id, file_id, &drive_id, parent_file_id);
-        let resp = self.request(url, payload).await?;
+        let resp = self.request(url, payload, None).await?;
         Ok(resp)
     }
 
@@ -528,7 +531,7 @@ impl ADriveAPI {
         let drive_id = self.credentials.drive_id.clone();
         let payload = StarredFileRequest::new(&drive_id, file_id, true);
         println!("{:?}", payload);
-        let resp = self.request(url, payload).await?;
+        let resp = self.request(url, payload, None).await?;
         Ok(resp)
     }
 
@@ -536,7 +539,31 @@ impl ADriveAPI {
         let url = Self::join_url(ADRIVE_STARRED_FILE, None)?;
         let drive_id = self.credentials.drive_id.clone();
         let payload = StarredFileRequest::new(&drive_id, file_id, false);
-        let resp = self.request(url, payload).await?;
+        let resp = self.request(url, payload, None).await?;
+        Ok(resp)
+    }
+
+    fn signature_crypto(&self, data: &str) -> String {
+        todo!()
+    }
+
+    pub async fn create_session(&mut self, pub_key: &str) -> anyhow::Result<SessionResponse> {
+        let url = Self::join_url(ADRIVE_CREATE_SESSION, None)?;
+        let payload = CreateSessionRequest::new(pub_key);
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert("x-device-id", "".parse()?);
+        headers.insert("x-signature", "".parse()?);
+        let resp = self.request(url, payload, Some(headers)).await?;
+        Ok(resp)
+    }
+
+    pub async fn renew_session(&mut self) -> anyhow::Result<SessionResponse> {
+        let url = Self::join_url(ADRIVE_RENEW_SESSION, None)?;
+        let payload = RenewSessionRequest;
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert("x-device-id", "".parse()?);
+        headers.insert("x-signature", "".parse()?);
+        let resp = self.request(url, payload, Some(headers)).await?;
         Ok(resp)
     }
 
@@ -551,7 +578,12 @@ impl ADriveAPI {
         Ok(url)
     }
 
-    async fn request<'a, S, D>(&mut self, url: Url, payload: S) -> anyhow::Result<D>
+    async fn request<'a, S, D>(
+        &mut self,
+        url: Url,
+        payload: S,
+        headers: Option<reqwest::header::HeaderMap>,
+    ) -> anyhow::Result<D>
     where
         S: Serialize,
         D: DeserializeOwned,
@@ -566,6 +598,7 @@ impl ADriveAPI {
             // .header("origin", "https://www.aliyundrive.com")
             // .header("referer","https://www.aliyundrive.com/")
             // .header("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36 Edg/110.0.1587.41")
+            .headers(headers.unwrap_or_default())
             .json(&payload)
             .bearer_auth(&mut self.credentials.access_token)
             // .bearer_auth(access_token)
