@@ -1,9 +1,7 @@
 #![allow(dead_code)]
 
-use std::any;
-use std::borrow::Borrow;
+use std::fmt::Debug;
 use std::fs::File;
-use std::future::Future;
 use std::{cmp::min, io::SeekFrom};
 
 use anyhow::{self, Ok};
@@ -485,12 +483,12 @@ impl ADriveAPI {
 
         let mut stream = HTTPCLIENT
             .get(resp.url)
-            // .header("x-device-id", "")
-            // .header("x-signature", "")
-            // .header("x-canary", "client=web,app=adrive,version=v4.2.0")
-            // .header("origin", "https://www.aliyundrive.com")
-            // .header("referer","https://www.aliyundrive.com/")
-            // .header("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36 Edg/110.0.1587.41")
+            .header("x-device-id", "TtJyG9Dr1xACAW/HvPmBEBpm")
+            .header("x-signature", "")
+            .header("x-canary", "client=web,app=adrive,version=v4.2.0")
+            .header("origin", "https://www.aliyundrive.com")
+            .header("referer","https://www.aliyundrive.com/")
+            .header("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36 Edg/110.0.1587.41")
             .send()
             .await?
             .bytes_stream();
@@ -543,28 +541,59 @@ impl ADriveAPI {
         Ok(resp)
     }
 
-    fn signature_crypto(&self, data: &str) -> String {
-        todo!()
+    pub fn signature_crypto(&self) -> (String, String) {
+        let content = format!(
+            "{app_id}:{device_id}:{user_id}:{nonce}",
+            app_id = "25dzX3vbYqktVxyX",
+            device_id = "797ef840-3d6f-44ff-b58d-0ad9b1104196",
+            user_id = "638c401866394d44bc90dff35c39cb92",
+            nonce = 0,
+        );
+
+        use k256::ecdsa::{signature::Signer, Signature, SigningKey, VerifyingKey};
+
+        use rand_core::OsRng;
+        let signing_key = SigningKey::random(&mut OsRng); // Serialize with `::to_bytes()`
+        let signature: Signature = signing_key.sign(content.as_bytes());
+
+        let sig = format!("{}01", hex::encode(signature.to_bytes()));
+        let verifying_key = VerifyingKey::from(&signing_key); // Serialize with `::to_encoded_point()`
+        let public_key = format!("04{}", hex::encode(verifying_key.to_sec1_bytes()));
+        (public_key, sig)
     }
 
-    pub async fn create_session(&mut self, pub_key: &str) -> anyhow::Result<SessionResponse> {
+    pub async fn create_session(&mut self) -> anyhow::Result<SessionResponse> {
+        let (pub_key, sig) = self.signature_crypto();
         let url = Self::join_url(ADRIVE_CREATE_SESSION, None)?;
-        let payload = CreateSessionRequest::new(pub_key);
+        let payload = CreateSessionRequest::new(&pub_key);
         let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert("x-device-id", "".parse()?);
-        headers.insert("x-signature", "".parse()?);
+        headers.insert(
+            "x-device-id",
+            "797ef840-3d6f-44ff-b58d-0ad9b1104196".parse()?,
+        );
+        headers.insert("x-signature", sig.parse()?);
+        println!("{:#?}", headers);
         let resp = self.request(url, payload, Some(headers)).await?;
         Ok(resp)
     }
 
-    pub async fn renew_session(&mut self) -> anyhow::Result<SessionResponse> {
+    pub async fn renew_session(&mut self) -> anyhow::Result<()> {
         let url = Self::join_url(ADRIVE_RENEW_SESSION, None)?;
         let payload = RenewSessionRequest;
         let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert("x-device-id", "".parse()?);
-        headers.insert("x-signature", "".parse()?);
-        let resp = self.request(url, payload, Some(headers)).await?;
-        Ok(resp)
+        headers.insert(
+            "x-device-id",
+            "797ef840-3d6f-44ff-b58d-0ad9b1104196".parse()?,
+        );
+        headers.insert("x-signature", "".parse()?); // TODO
+        headers.insert("Content-Type", "application/json;charset=UTF-8".parse()?);
+        headers.insert("origin", "https://www.aliyundrive.com".parse()?);
+        headers.insert("referer", "https://www.aliyundrive.com".parse()?);
+        headers.insert("x-canary", "client=web,app=adrive,version=v4.3.0".parse()?);
+        headers.insert("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36 Edg/112.0.1722.58".parse()?);
+        let resp: serde_json::Value = self.request(url, payload, Some(headers)).await?;
+        println!("{:#?}", resp);
+        Ok(())
     }
 
     fn join_url(sub_url: &str, base_url: Option<&str>) -> anyhow::Result<Url> {
@@ -592,7 +621,7 @@ impl ADriveAPI {
         let resp = HTTPCLIENT
             .post(url)
             // # TODO invalid X-Device-Id
-            // .header("x-device-id", "")
+            // .header("x-device-id", "TtJyG9Dr1xACAW/HvPmBEBpm")
             // .header("x-signature", "")
             // .header("x-canary", "client=web,app=adrive,version=v4.2.0")
             // .header("origin", "https://www.aliyundrive.com")
