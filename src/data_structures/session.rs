@@ -1,3 +1,4 @@
+use crate::data_structures::{Request, Response};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Debug)]
@@ -28,3 +29,5 @@ pub struct SessionResponse {
     code: Option<String>,
     message: Option<String>,
 }
+
+impl Response for SessionResponse {}
