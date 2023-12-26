@@ -1,5 +1,6 @@
+use crate::constants::DOMAIN;
 use crate::data_structures::Request;
-use reqwest::Method;
+use reqwest::{Method, Url};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
@@ -43,7 +44,22 @@ pub struct GetQRCodeResponse {
 }
 
 #[derive(Debug, Serialize)]
-pub struct GetQRCodeImageRequest {}
+pub struct GetQRCodeImageRequest<'a> {
+    #[serde(skip_serializing)]
+    pub sid: &'a str,
+}
+
+impl Request for GetQRCodeImageRequest<'_> {
+    const URI: &'static str = "/oauth/qrcode/{sid}";
+    const METHOD: Method = Method::GET;
+    type Response = GetQRCodeImageResponse;
+
+    fn path_join(&self) -> std::result::Result<url::Url, Box<dyn std::error::Error>> {
+        let uri = Self::URI.replace("{sid}", self.sid);
+        let path = Url::parse(DOMAIN)?.join(&uri)?;
+        Ok(path)
+    }
+}
 
 #[derive(Debug, Deserialize)]
 pub struct GetQRCodeImageResponse {}
@@ -56,17 +72,44 @@ pub enum QRCodeStatus {
     QRCodeExpired,
 }
 
-#[derive(Debug, Serialize)]
-pub struct GetQRCodeStatusRequest {}
+impl From<&str> for QRCodeStatus {
+    fn from(value: &str) -> Self {
+        match value {
+            "WaitLogin" => QRCodeStatus::WaitLogin,
+            "ScanSuccess" => QRCodeStatus::ScanSuccess,
+            "LoginSuccess" => QRCodeStatus::LoginSuccess,
+            "QRCodeExpired" => QRCodeStatus::QRCodeExpired,
+            _ => todo!(),
+        }
+    }
+}
 
+#[derive(Debug, Serialize)]
+pub struct GetQRCodeStatusRequest<'a> {
+    #[serde(skip_serializing)]
+    pub sid: &'a str,
+}
+
+impl Request for GetQRCodeStatusRequest<'_> {
+    const URI: &'static str = "/oauth/qrcode/{sid}/status";
+    const METHOD: Method = Method::GET;
+    type Response = GetQRCodeStatusResponse;
+
+    fn path_join(&self) -> std::result::Result<url::Url, Box<dyn std::error::Error>> {
+        let uri = Self::URI.replace("{sid}", self.sid);
+        let path = Url::parse(DOMAIN)?.join(&uri)?;
+        Ok(path)
+    }
+}
 #[derive(Debug, Deserialize)]
 pub struct GetQRCodeStatusResponse {
     pub status: QRCodeStatus,
-    #[serde(rename = "camelCase")]
+    #[serde(rename = "authCode")]
     pub auth_code: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum GrantType {
     AuthorizationCode,
     RefreshToken,
@@ -81,10 +124,49 @@ pub struct GetAccessTokenRequest<'a> {
     refresh_token: Option<&'a str>,
 }
 
+impl<'a> GetAccessTokenRequest<'a> {
+    pub fn new(
+        client_id: &'a str,
+        client_secret: &'a str,
+        code: Option<&'a str>,
+        refresh_token: Option<&'a str>,
+    ) -> Self {
+        if refresh_token.is_some() {
+            return Self {
+                client_id,
+                client_secret,
+                code: None,
+                grant_type: GrantType::RefreshToken,
+                refresh_token,
+            };
+        } else {
+            if code.is_some() {
+                return Self {
+                    client_id,
+                    client_secret,
+                    code,
+                    grant_type: GrantType::AuthorizationCode,
+                    refresh_token: None,
+                };
+            } else {
+                panic!("code or refresh_token must be provided");
+            }
+        }
+    }
+}
+
+impl Request for GetAccessTokenRequest<'_> {
+    const URI: &'static str = "/oauth/access_token";
+    const METHOD: Method = Method::POST;
+    type Response = GetAccessTokenResponse;
+}
+
 #[derive(Debug, Deserialize)]
 pub struct GetAccessTokenResponse {
     pub token_type: String,
     pub access_token: String,
     pub refresh_token: String,
     pub expires_in: u32,
+    // pub code: String,
+    // pub message: String,
 }
