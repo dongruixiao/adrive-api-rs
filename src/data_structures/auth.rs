@@ -1,4 +1,5 @@
 use crate::data_structures::Request;
+use reqwest::Method;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
@@ -30,6 +31,7 @@ impl<'a> GetQRCodeRequest<'a> {
 
 impl Request for GetQRCodeRequest<'_> {
     const URI: &'static str = "/oauth/authorize/qrcode";
+    const METHOD: Method = Method::POST;
     type Response = GetQRCodeResponse;
 }
 
