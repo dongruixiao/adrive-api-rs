@@ -1,8 +1,9 @@
-use crate::constants::QRCODE_EXPIRED_TIME;
-use crate::data_structures::{GetAccessTokenRequest, Request};
+use crate::data_structures::{GetAccessTokenRequest, GetAccessTokenResponse, Request};
 use crate::data_structures::{GetQRCodeRequest, GetQRCodeStatusRequest, QRCodeStatus};
+use std::path::PathBuf;
 use std::{thread, time};
 
+use chrono::Utc;
 use reqwest::Client;
 use std::{error, result};
 pub struct Auth<'a> {
@@ -63,9 +64,59 @@ impl Auth<'_> {
         println!("########################################");
         println!("### 登陆成功: {}", resp.access_token);
         println!("########################################");
+
+        self.dump(&resp)?;
         Ok(())
     }
 
-    fn refresh_token(&self) {}
-    fn refresh_if_needed(&self) {}
+    async fn refresh_token(&self) -> result::Result<(), Box<dyn error::Error>> {
+        let token = Self::load()?;
+        let resp = GetAccessTokenRequest::new(
+            self.client_id,
+            self.client_secret,
+            None,
+            Some(&token.refresh_token),
+        )
+        .dispatch(&self.reqwest_client, None)
+        .await?;
+        self.dump(&resp)?;
+        Ok(())
+    }
+
+    pub async fn refresh_if_needed(&mut self) -> result::Result<(), Box<dyn error::Error>> {
+        let token = Self::load()?;
+        if Utc::now().timestamp() - token.time.timestamp() >= token.expires_in {
+            self.refresh_token().await?;
+            println!("已刷新");
+        }
+        println!("无需刷新");
+        Ok(())
+    }
+
+    pub fn path() -> PathBuf {
+        dirs::config_dir()
+            .expect("no config dir detected")
+            .join("adrive-api-rs/credentials")
+    }
+
+    pub fn dump(
+        &self,
+        token: &GetAccessTokenResponse,
+    ) -> result::Result<(), Box<dyn error::Error>> {
+        let path = &Self::path();
+        if !path.exists() {
+            std::fs::create_dir_all(path.parent().expect("no parent dir detected"))?;
+            std::fs::File::create(path)?;
+        }
+
+        let file = std::fs::File::create(path)?;
+        serde_json::to_writer_pretty(file, token)?;
+        Ok(())
+    }
+
+    pub fn load() -> result::Result<GetAccessTokenResponse, Box<dyn error::Error>> {
+        let file = std::fs::File::open(Self::path())?;
+        let token: GetAccessTokenResponse = serde_json::from_reader(file)?;
+        Ok(token)
+    }
 }

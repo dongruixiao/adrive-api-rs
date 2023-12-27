@@ -1,5 +1,6 @@
 use crate::constants::DOMAIN;
 use crate::data_structures::Request;
+use chrono::{DateTime, Utc};
 use reqwest::{Method, Url};
 use serde::{Deserialize, Serialize};
 
@@ -161,12 +162,14 @@ impl Request for GetAccessTokenRequest<'_> {
     type Response = GetAccessTokenResponse;
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct GetAccessTokenResponse {
     pub token_type: String,
     pub access_token: String,
     pub refresh_token: String,
-    pub expires_in: u32,
+    pub expires_in: i64,
+    #[serde(default = "Utc::now")]
+    pub time: DateTime<Utc>,
     // pub code: String,
     // pub message: String,
 }
