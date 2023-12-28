@@ -23,7 +23,7 @@ impl Auth<'_> {
 
     pub async fn sign_in(&self) -> result::Result<(), Box<dyn error::Error>> {
         let resp = GetQRCodeRequest::new(self.client_id, self.client_secret)
-            .dispatch(&self.reqwest_client, None)
+            .dispatch(&self.reqwest_client, None, None)
             .await?;
 
         println!("########################################");
@@ -32,7 +32,7 @@ impl Auth<'_> {
 
         let auth_code = loop {
             let resp = GetQRCodeStatusRequest { sid: &resp.sid }
-                .dispatch(&self.reqwest_client, None)
+                .dispatch(&self.reqwest_client, None, None)
                 .await?;
             match resp.status {
                 QRCodeStatus::WaitLogin => println!("等待扫码登陆..."),
@@ -57,7 +57,7 @@ impl Auth<'_> {
             Some(&auth_code.unwrap()),
             None,
         )
-        .dispatch(&self.reqwest_client, None)
+        .dispatch(&self.reqwest_client, None, None)
         .await?;
         println!("{:#?}", resp);
 
@@ -69,7 +69,7 @@ impl Auth<'_> {
         Ok(())
     }
 
-    async fn refresh_token(&self) -> result::Result<(), Box<dyn error::Error>> {
+    async fn refresh_token(&self) -> result::Result<GetAccessTokenResponse, Box<dyn error::Error>> {
         let token = Self::load()?;
         let resp = GetAccessTokenRequest::new(
             self.client_id,
@@ -77,20 +77,22 @@ impl Auth<'_> {
             None,
             Some(&token.refresh_token),
         )
-        .dispatch(&self.reqwest_client, None)
+        .dispatch(&self.reqwest_client, None, None)
         .await?;
         self.dump(&resp)?;
-        Ok(())
+        Ok(resp)
     }
 
-    pub async fn refresh_if_needed(&mut self) -> result::Result<(), Box<dyn error::Error>> {
+    pub async fn refresh_if_needed(
+        &self,
+    ) -> result::Result<GetAccessTokenResponse, Box<dyn error::Error>> {
         let token = Self::load()?;
         if Utc::now().timestamp() - token.time.timestamp() >= token.expires_in {
-            self.refresh_token().await?;
-            println!("已刷新");
+            let token = self.refresh_token().await?;
+            Ok(token)
+        } else {
+            Ok(token)
         }
-        println!("无需刷新");
-        Ok(())
     }
 
     pub fn path() -> PathBuf {

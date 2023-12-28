@@ -1,7 +1,6 @@
 use std::error::Error;
 use std::result::Result;
 
-use futures_util::TryFutureExt;
 use reqwest::Client;
 use serde_json::Value;
 use url::Url;

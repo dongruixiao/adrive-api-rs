@@ -133,25 +133,23 @@ impl<'a> GetAccessTokenRequest<'a> {
         refresh_token: Option<&'a str>,
     ) -> Self {
         if refresh_token.is_some() {
-            return Self {
+            Self {
                 client_id,
                 client_secret,
                 code: None,
                 grant_type: GrantType::RefreshToken,
                 refresh_token,
-            };
-        } else {
-            if code.is_some() {
-                return Self {
-                    client_id,
-                    client_secret,
-                    code,
-                    grant_type: GrantType::AuthorizationCode,
-                    refresh_token: None,
-                };
-            } else {
-                panic!("code or refresh_token must be provided");
             }
+        } else if code.is_some() {
+            Self {
+                client_id,
+                client_secret,
+                code,
+                grant_type: GrantType::AuthorizationCode,
+                refresh_token: None,
+            }
+        } else {
+            panic!("code or refresh_token must be provided");
         }
     }
 }

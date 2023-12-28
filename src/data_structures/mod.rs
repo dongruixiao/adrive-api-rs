@@ -1,11 +1,15 @@
 pub mod auth;
+pub mod file;
+pub mod user;
 use crate::constants::DOMAIN;
 use async_trait::async_trait;
 pub use auth::*;
+pub use file::*;
 use reqwest::{header::HeaderMap, Client, Method, Url};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::{error, result};
+pub use user::*;
 
 trait Response {}
 
@@ -19,10 +23,11 @@ pub trait Request: Sized + Serialize {
         &self,
         reqwest_client: &Client,
         headers: Option<HeaderMap>,
+        token: Option<&str>,
     ) -> result::Result<Self::Response, Box<dyn error::Error>> {
         match Self::METHOD {
-            Method::GET => self.get(reqwest_client, headers).await,
-            Method::POST => self.post(reqwest_client, headers).await,
+            Method::GET => self.get(reqwest_client, headers, token).await,
+            Method::POST => self.post(reqwest_client, headers, token).await,
             _ => Err(format!("NotImplMethod: {}", Self::METHOD).into()),
         }
     }
@@ -31,10 +36,12 @@ pub trait Request: Sized + Serialize {
         &self,
         reqwest_client: &Client,
         headers: Option<HeaderMap>,
+        token: Option<&str>,
     ) -> result::Result<Self::Response, Box<dyn error::Error>> {
         let path = self.path_join()?;
         let resp = reqwest_client
             .post(path)
+            .bearer_auth(token.unwrap_or_default())
             .headers(headers.unwrap_or_default())
             .json(&self)
             .send()
@@ -48,10 +55,12 @@ pub trait Request: Sized + Serialize {
         &self,
         reqwest_client: &Client,
         headers: Option<HeaderMap>,
+        token: Option<&str>,
     ) -> result::Result<Self::Response, Box<dyn error::Error>> {
         let path = self.path_join()?;
         let resp = reqwest_client
             .get(path)
+            .bearer_auth(token.unwrap_or_default())
             .headers(headers.unwrap_or_default())
             .form(&self)
             .send()
