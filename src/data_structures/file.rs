@@ -150,7 +150,6 @@ pub struct FileSearchingItem {
     pub url: Option<String>,
     pub created_at: String,
     pub updated_at: String,
-    pub play_cursor: Option<String>,
     pub next_marker: Option<String>,
     pub total_count: Option<u32>,
 }
@@ -158,4 +157,55 @@ pub struct FileSearchingItem {
 #[derive(Debug, Deserialize)]
 pub struct FileSearchingResponse {
     pub items: Vec<FileSearchingItem>,
+}
+
+#[derive(Debug, Serialize, Default)]
+pub struct GetFileStarredListRequest<'a> {
+    drive_id: &'a str,
+    limit: Option<u32>,
+    marker: Option<&'a str>,
+    r#type: Option<FileType>,
+    order_by: Option<OrderBy>,
+    order_direction: Option<SortBy>,
+    video_thumbnail_time: Option<u32>,
+    video_thumbnail_width: Option<u32>,
+    video_thumbnail_height: Option<u32>,
+}
+
+impl<'a> GetFileStarredListRequest<'a> {
+    pub fn new(drive_id: &'a str) -> Self {
+        Self {
+            drive_id,
+            ..Default::default()
+        }
+    }
+}
+
+impl Request for GetFileStarredListRequest<'_> {
+    const URI: &'static str = "/adrive/v1.0/openFile/starredList";
+    const METHOD: reqwest::Method = Method::POST;
+    type Response = GetFileStarredListResponse;
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FileStarredItem {
+    pub drive_id: String,
+    pub file_id: String,
+    pub parent_file_id: String,
+    pub name: String,
+    pub size: Option<u64>,              // TODO folder don't have size
+    pub file_extension: Option<String>, // TODO folder don't have file_extension
+    pub content_hash: Option<String>,   // TODO folder don't have content_hash
+    pub category: Option<String>,       // TODO folder don't have category
+    pub r#type: FileType,
+    pub thumbnail: Option<String>,
+    pub url: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub next_marker: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GetFileStarredListResponse {
+    pub items: Vec<FileStarredItem>,
 }

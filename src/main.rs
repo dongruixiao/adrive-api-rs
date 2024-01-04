@@ -15,8 +15,13 @@ async fn main() {
     //     .await
     //     .unwrap();
     // println!("{:#?}", resp)
+    // let resp = ADriveAPI::new()
+    //     .search_for_file(&resp.default_drive_id, "name match '张汉东'")
+    //     .await
+    //     .unwrap();
+    // println!("{:#?}", resp);
     let resp = ADriveAPI::new()
-        .search_for_file(&resp.default_drive_id, "name match '张汉东'")
+        .get_starred_file_list(&resp.default_drive_id)
         .await
         .unwrap();
     println!("{:#?}", resp);
