@@ -220,7 +220,7 @@ pub struct GetFileStarredListResponse {
 }
 
 #[derive(Debug, Serialize, Default)]
-pub struct GetFileDetailRequest<'a> {
+pub struct GetFileDetailByIdRequest<'a> {
     drive_id: &'a str,
     file_id: &'a str,
     video_thumbnail_time: Option<u32>,
@@ -229,7 +229,7 @@ pub struct GetFileDetailRequest<'a> {
     fields: Option<&'a str>, // *
 }
 
-impl<'a> GetFileDetailRequest<'a> {
+impl<'a> GetFileDetailByIdRequest<'a> {
     pub fn new(drive_id: &'a str, file_id: &'a str) -> Self {
         Self {
             drive_id,
@@ -242,7 +242,7 @@ impl<'a> GetFileDetailRequest<'a> {
     }
 }
 
-impl Request for GetFileDetailRequest<'_> {
+impl Request for GetFileDetailByIdRequest<'_> {
     const URI: &'static str = "/adrive/v1.0/openFile/get";
     const METHOD: reqwest::Method = Method::POST;
     type Response = GetFileDetailResponse;
@@ -264,4 +264,25 @@ pub struct GetFileDetailResponse {
     pub created_at: String,
     pub updated_at: String,
     pub video_media_metadata: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, Default)]
+pub struct GetFileDetailByPathRequest<'a> {
+    drive_id: &'a str,
+    file_path: &'a str,
+}
+
+impl<'a> GetFileDetailByPathRequest<'a> {
+    pub fn new(drive_id: &'a str, file_path: &'a str) -> Self {
+        Self {
+            drive_id,
+            file_path,
+        }
+    }
+}
+
+impl Request for GetFileDetailByPathRequest<'_> {
+    const URI: &'static str = "/adrive/v1.0/openFile/get_by_path";
+    const METHOD: reqwest::Method = Method::POST;
+    type Response = GetFileDetailResponse;
 }

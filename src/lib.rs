@@ -4,11 +4,11 @@ pub mod data_structures;
 
 use data_structures::{
     FileSearchingRequest, FileSearchingResponse, GetDriveInfoRequest, GetDriveInfoResponse,
-    GetFileDetailRequest, GetFileDetailResponse, GetFileListRequest, GetFileListResponse,
-    GetFileStarredListRequest, GetFileStarredListResponse, GetSpaceInfoRequest,
-    GetSpaceInfoResponse, GetUserInfoRequest, GetUserInfoResponse, Request,
+    GetFileDetailByIdRequest, GetFileDetailByPathRequest, GetFileDetailResponse,
+    GetFileListRequest, GetFileListResponse, GetFileStarredListRequest, GetFileStarredListResponse,
+    GetSpaceInfoRequest, GetSpaceInfoResponse, GetUserInfoRequest, GetUserInfoResponse, Request,
 };
-use std::{error, result};
+use std::{error, path, result};
 
 pub struct ADriveAPI<'a> {
     auth: auth::Auth<'a>,
@@ -92,13 +92,24 @@ impl ADriveAPI<'_> {
         Ok(resp)
     }
 
-    pub async fn get_file_detail(
+    pub async fn get_file_detail_by_id(
         &self,
         drive_id: &str,
         file_id: &str,
     ) -> result::Result<GetFileDetailResponse, Box<dyn error::Error>> {
         let token = self.auth.refresh_if_needed().await?;
-        GetFileDetailRequest::new(drive_id, file_id)
+        GetFileDetailByIdRequest::new(drive_id, file_id)
+            .dispatch(None, Some(&token.access_token))
+            .await
+    }
+
+    pub async fn get_file_detail_by_path(
+        &self,
+        drive_id: &str,
+        path: &str,
+    ) -> result::Result<GetFileDetailResponse, Box<dyn error::Error>> {
+        let token = self.auth.refresh_if_needed().await?;
+        GetFileDetailByPathRequest::new(drive_id, path)
             .dispatch(None, Some(&token.access_token))
             .await
     }
