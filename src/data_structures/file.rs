@@ -41,10 +41,10 @@ pub struct GetFileListRequest<'a> {
     order_direction: Option<SortBy>,
     category: Option<&'a str>, // TODO
     r#type: Option<FileType>,
-    video_thumbnail_time: Option<u32>,
-    video_thumbnail_width: Option<u32>,
-    video_thumbnail_height: Option<u32>,
-    fields: Option<&'a str>, // TODO *
+    video_thumbnail_time: Option<u32>,  // ms
+    video_thumbnail_width: Option<u32>, // px
+    image_thumbnail_width: Option<u32>, // px
+    fields: Option<&'a str>,            // TODO *
 }
 
 impl<'a> GetFileListRequest<'a> {
@@ -52,6 +52,9 @@ impl<'a> GetFileListRequest<'a> {
         Self {
             drive_id,
             parent_file_id,
+            video_thumbnail_time: Some(120000), // ms
+            video_thumbnail_width: Some(480),   // px
+            image_thumbnail_width: Some(480),   // px
             ..Default::default()
         }
     }
@@ -115,7 +118,7 @@ pub struct FileSearchingRequest<'a> {
     order_by: Option<OrderBy>,
     video_thumbnail_time: Option<u32>,
     video_thumbnail_width: Option<u32>,
-    video_thumbnail_height: Option<u32>,
+    image_thumbnail_width: Option<u32>,
     return_total_count: Option<bool>,
 }
 
@@ -124,6 +127,9 @@ impl<'a> FileSearchingRequest<'a> {
         Self {
             drive_id,
             query,
+            video_thumbnail_time: Some(120000), // ms
+            video_thumbnail_width: Some(480),   // px
+            image_thumbnail_width: Some(480),   // px
             ..Default::default()
         }
     }
@@ -169,13 +175,16 @@ pub struct GetFileStarredListRequest<'a> {
     order_direction: Option<SortBy>,
     video_thumbnail_time: Option<u32>,
     video_thumbnail_width: Option<u32>,
-    video_thumbnail_height: Option<u32>,
+    image_thumbnail_width: Option<u32>,
 }
 
 impl<'a> GetFileStarredListRequest<'a> {
     pub fn new(drive_id: &'a str) -> Self {
         Self {
             drive_id,
+            video_thumbnail_time: Some(120000), // ms
+            video_thumbnail_width: Some(480),   // px
+            image_thumbnail_width: Some(480),   // px
             ..Default::default()
         }
     }
@@ -208,4 +217,51 @@ pub struct FileStarredItem {
 #[derive(Debug, Deserialize)]
 pub struct GetFileStarredListResponse {
     pub items: Vec<FileStarredItem>,
+}
+
+#[derive(Debug, Serialize, Default)]
+pub struct GetFileDetailRequest<'a> {
+    drive_id: &'a str,
+    file_id: &'a str,
+    video_thumbnail_time: Option<u32>,
+    video_thumbnail_width: Option<u32>,
+    image_thumbnail_width: Option<u32>,
+    fields: Option<&'a str>, // *
+}
+
+impl<'a> GetFileDetailRequest<'a> {
+    pub fn new(drive_id: &'a str, file_id: &'a str) -> Self {
+        Self {
+            drive_id,
+            file_id,
+            video_thumbnail_time: Some(120000), // ms
+            video_thumbnail_width: Some(480),   // px
+            image_thumbnail_width: Some(480),   // px
+            ..Default::default()
+        }
+    }
+}
+
+impl Request for GetFileDetailRequest<'_> {
+    const URI: &'static str = "/adrive/v1.0/openFile/get";
+    const METHOD: reqwest::Method = Method::POST;
+    type Response = GetFileDetailResponse;
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GetFileDetailResponse {
+    pub drive_id: String,
+    pub file_id: String,
+    pub parent_file_id: String,
+    pub name: String,
+    pub size: u64,
+    pub file_extension: String,
+    pub content_hash: String,
+    pub category: String,
+    pub r#type: FileType,
+    pub thumbnail: String,
+    pub url: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub video_media_metadata: serde_json::Value,
 }
