@@ -4,7 +4,8 @@ pub mod data_structures;
 
 use data_structures::{
     BatchGetFileDetailByIdRequest, BatchGetFileDetailByIdResponse, FileSearchingRequest,
-    FileSearchingResponse, GetDriveInfoRequest, GetDriveInfoResponse, GetFileDetailByIdRequest,
+    FileSearchingResponse, GetDownloadUrlByIdRequest, GetDownloadUrlByIdResponse,
+    GetDriveInfoRequest, GetDriveInfoResponse, GetFileDetailByIdRequest,
     GetFileDetailByPathRequest, GetFileDetailResponse, GetFileListRequest, GetFileListResponse,
     GetFileStarredListRequest, GetFileStarredListResponse, GetSpaceInfoRequest,
     GetSpaceInfoResponse, GetUserInfoRequest, GetUserInfoResponse, Request,
@@ -127,6 +128,17 @@ impl ADriveAPI<'_> {
             file_list.push(GetFileDetailByIdRequest::new(drive_id, file_id));
         }
         BatchGetFileDetailByIdRequest { file_list }
+            .dispatch(None, Some(&token.access_token))
+            .await
+    }
+
+    pub async fn get_download_url_by_file_id(
+        &self,
+        drive_id: &str,
+        file_id: &str,
+    ) -> result::Result<GetDownloadUrlByIdResponse, Box<dyn error::Error>> {
+        let token = self.auth.refresh_if_needed().await?;
+        GetDownloadUrlByIdRequest::new(drive_id, file_id)
             .dispatch(None, Some(&token.access_token))
             .await
     }

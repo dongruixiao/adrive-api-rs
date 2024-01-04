@@ -300,5 +300,35 @@ impl Request for BatchGetFileDetailByIdRequest<'_> {
 
 #[derive(Debug, Deserialize)]
 pub struct BatchGetFileDetailByIdResponse {
-    items: Vec<GetFileDetailResponse>,
+    pub items: Vec<GetFileDetailResponse>,
+}
+
+#[derive(Debug, Serialize, Default)]
+pub struct GetDownloadUrlByIdRequest<'a> {
+    drive_id: &'a str,
+    file_id: &'a str,
+    expire_sec: Option<u32>,
+}
+
+impl<'a> GetDownloadUrlByIdRequest<'a> {
+    pub fn new(drive_id: &'a str, file_id: &'a str) -> Self {
+        Self {
+            drive_id,
+            file_id,
+            expire_sec: Some(900), //s
+        }
+    }
+}
+
+impl Request for GetDownloadUrlByIdRequest<'_> {
+    const URI: &'static str = "/adrive/v1.0/openFile/getDownloadUrl";
+    const METHOD: reqwest::Method = Method::POST;
+    type Response = GetDownloadUrlByIdResponse;
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GetDownloadUrlByIdResponse {
+    pub url: String,
+    pub expiration: String,
+    pub method: String,
 }
