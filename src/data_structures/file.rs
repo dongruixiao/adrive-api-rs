@@ -286,3 +286,19 @@ impl Request for GetFileDetailByPathRequest<'_> {
     const METHOD: reqwest::Method = Method::POST;
     type Response = GetFileDetailResponse;
 }
+
+#[derive(Debug, Serialize, Default)]
+pub struct BatchGetFileDetailByIdRequest<'a> {
+    pub file_list: Vec<GetFileDetailByIdRequest<'a>>,
+}
+
+impl Request for BatchGetFileDetailByIdRequest<'_> {
+    const URI: &'static str = "/adrive/v1.0/openFile/batch/get";
+    const METHOD: reqwest::Method = Method::POST;
+    type Response = BatchGetFileDetailByIdResponse;
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BatchGetFileDetailByIdResponse {
+    items: Vec<GetFileDetailResponse>,
+}

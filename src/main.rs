@@ -21,9 +21,12 @@ async fn main() {
     //     .unwrap();
     // println!("{:#?}", resp);
     let resp = ADriveAPI::new()
-        .get_file_detail(
-            &resp.default_drive_id,
-            "63fcd09f609ce464d23944289fd4d583f8ca100b",
+        .batch_file_detail_by_id(
+            &[&resp.default_drive_id, &resp.default_drive_id],
+            &[
+                "63fcd09f609ce464d23944289fd4d583f8ca100b",
+                "63fcd09f609ce464d23944289fd4d583f8ca100b",
+            ],
         )
         .await
         .unwrap();

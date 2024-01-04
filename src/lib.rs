@@ -3,10 +3,11 @@ pub mod constants;
 pub mod data_structures;
 
 use data_structures::{
-    FileSearchingRequest, FileSearchingResponse, GetDriveInfoRequest, GetDriveInfoResponse,
-    GetFileDetailByIdRequest, GetFileDetailByPathRequest, GetFileDetailResponse,
-    GetFileListRequest, GetFileListResponse, GetFileStarredListRequest, GetFileStarredListResponse,
-    GetSpaceInfoRequest, GetSpaceInfoResponse, GetUserInfoRequest, GetUserInfoResponse, Request,
+    BatchGetFileDetailByIdRequest, BatchGetFileDetailByIdResponse, FileSearchingRequest,
+    FileSearchingResponse, GetDriveInfoRequest, GetDriveInfoResponse, GetFileDetailByIdRequest,
+    GetFileDetailByPathRequest, GetFileDetailResponse, GetFileListRequest, GetFileListResponse,
+    GetFileStarredListRequest, GetFileStarredListResponse, GetSpaceInfoRequest,
+    GetSpaceInfoResponse, GetUserInfoRequest, GetUserInfoResponse, Request,
 };
 use std::{error, path, result};
 
@@ -110,6 +111,22 @@ impl ADriveAPI<'_> {
     ) -> result::Result<GetFileDetailResponse, Box<dyn error::Error>> {
         let token = self.auth.refresh_if_needed().await?;
         GetFileDetailByPathRequest::new(drive_id, path)
+            .dispatch(None, Some(&token.access_token))
+            .await
+    }
+
+    pub async fn batch_file_detail_by_id(
+        &self,
+        drive_ids: &[&str],
+        file_ids: &[&str],
+    ) -> result::Result<BatchGetFileDetailByIdResponse, Box<dyn error::Error>> {
+        let token = self.auth.refresh_if_needed().await?;
+        let mut file_list = Vec::new();
+        let zipper = drive_ids.iter().zip(file_ids.iter());
+        for (drive_id, file_id) in zipper {
+            file_list.push(GetFileDetailByIdRequest::new(drive_id, file_id));
+        }
+        BatchGetFileDetailByIdRequest { file_list }
             .dispatch(None, Some(&token.access_token))
             .await
     }
