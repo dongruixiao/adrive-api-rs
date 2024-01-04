@@ -10,9 +10,14 @@ async fn main() {
     println!("{:#?}", resp);
     // let resp = ADriveAPI::new().space_info().await.unwrap();
     // println!("{:#?}", resp);
+    // let resp = ADriveAPI::new()
+    //     .get_file_list(&resp.resource_drive_id.unwrap(), "root")
+    //     .await
+    //     .unwrap();
+    // println!("{:#?}", resp)
     let resp = ADriveAPI::new()
-        .get_file_list(&resp.resource_drive_id.unwrap(), "root")
+        .search_for_file(&resp.default_drive_id, "name match '张汉东'")
         .await
         .unwrap();
-    println!("{:#?}", resp)
+    println!("{:#?}", resp);
 }

@@ -3,8 +3,9 @@ pub mod constants;
 pub mod data_structures;
 
 use data_structures::{
-    GetDriveInfoRequest, GetDriveInfoResponse, GetFileListRequest, GetFileListResponse,
-    GetSpaceInfoRequest, GetSpaceInfoResponse, GetUserInfoRequest, GetUserInfoResponse, Request,
+    FileSearchingRequest, FileSearchingResponse, GetDriveInfoRequest, GetDriveInfoResponse,
+    GetFileListRequest, GetFileListResponse, GetSpaceInfoRequest, GetSpaceInfoResponse,
+    GetUserInfoRequest, GetUserInfoResponse, Request,
 };
 use std::{error, result};
 
@@ -56,12 +57,24 @@ impl ADriveAPI<'_> {
     }
 
     pub async fn get_file_list(
-        &mut self,
+        &self,
         drive_id: &str,
         parent_file_id: &str,
     ) -> result::Result<GetFileListResponse, Box<dyn error::Error>> {
         let token = self.auth.refresh_if_needed().await?;
         let resp = GetFileListRequest::new(drive_id, parent_file_id)
+            .dispatch(None, Some(&token.access_token))
+            .await?;
+        Ok(resp)
+    }
+
+    pub async fn search_for_file(
+        &mut self,
+        drive_id: &str,
+        query: &str,
+    ) -> result::Result<FileSearchingResponse, Box<dyn error::Error>> {
+        let token = self.auth.refresh_if_needed().await?;
+        let resp = FileSearchingRequest::new(drive_id, Some(query))
             .dispatch(None, Some(&token.access_token))
             .await?;
         Ok(resp)
