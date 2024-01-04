@@ -3,20 +3,18 @@ pub mod constants;
 pub mod data_structures;
 
 use data_structures::{
-    GetDriveInfoRequest, GetDriveInfoResponse, GetSpaceInfoRequest, GetSpaceInfoResponse,
-    GetUserInfoRequest, GetUserInfoResponse, Request,
+    GetDriveInfoRequest, GetDriveInfoResponse, GetFileListRequest, GetFileListResponse,
+    GetSpaceInfoRequest, GetSpaceInfoResponse, GetUserInfoRequest, GetUserInfoResponse, Request,
 };
 use std::{error, result};
 
 pub struct ADriveAPI<'a> {
-    reqwest_client: reqwest::Client,
     auth: auth::Auth<'a>,
 }
 
 impl ADriveAPI<'_> {
     pub fn new() -> Self {
-        ADriveAPI {
-            reqwest_client: reqwest::Client::new(),
+        Self {
             auth: auth::Auth::new(),
         }
     }
@@ -24,7 +22,7 @@ impl ADriveAPI<'_> {
     pub async fn user_info(&self) -> result::Result<GetUserInfoResponse, Box<dyn error::Error>> {
         let token = self.auth.refresh_if_needed().await?;
         let resp = GetUserInfoRequest {}
-            .dispatch(&self.reqwest_client, None, Some(&token.access_token))
+            .dispatch(None, Some(&token.access_token))
             .await?;
         Ok(resp)
     }
@@ -32,15 +30,39 @@ impl ADriveAPI<'_> {
     pub async fn drive_info(&self) -> result::Result<GetDriveInfoResponse, Box<dyn error::Error>> {
         let token = self.auth.refresh_if_needed().await?;
         let resp = GetDriveInfoRequest {}
-            .dispatch(&self.reqwest_client, None, Some(&token.access_token))
+            .dispatch(None, Some(&token.access_token))
             .await?;
         Ok(resp)
     }
 
     pub async fn space_info(&self) -> result::Result<GetSpaceInfoResponse, Box<dyn error::Error>> {
-        let token = self.auth.refresh_if_needed().await?;
+        let token: data_structures::GetAccessTokenResponse = self.auth.refresh_if_needed().await?;
         let resp = GetSpaceInfoRequest {}
-            .dispatch(&self.reqwest_client, None, Some(&token.access_token))
+            .dispatch(None, Some(&token.access_token))
+            .await?;
+        Ok(resp)
+    }
+
+    pub async fn get_default_drive_id(&self) -> result::Result<String, Box<dyn error::Error>> {
+        Ok(self.drive_info().await?.default_drive_id)
+    }
+
+    pub async fn get_resource_drive_id(&self) -> result::Result<String, Box<dyn error::Error>> {
+        Ok(self.drive_info().await?.resource_drive_id.unwrap())
+    }
+
+    pub async fn get_backup_drive_id(&self) -> result::Result<String, Box<dyn error::Error>> {
+        Ok(self.drive_info().await?.backup_drive_id.unwrap())
+    }
+
+    pub async fn get_file_list(
+        &mut self,
+        drive_id: &str,
+        parent_file_id: &str,
+    ) -> result::Result<GetFileListResponse, Box<dyn error::Error>> {
+        let token = self.auth.refresh_if_needed().await?;
+        let resp = GetFileListRequest::new(drive_id, parent_file_id)
+            .dispatch(None, Some(&token.access_token))
             .await?;
         Ok(resp)
     }

@@ -4,10 +4,8 @@ use std::path::PathBuf;
 use std::{thread, time};
 
 use chrono::Utc;
-use reqwest::Client;
 use std::{error, result};
 pub struct Auth<'a> {
-    reqwest_client: Client,
     client_id: &'a str,
     client_secret: &'a str,
 }
@@ -15,7 +13,6 @@ pub struct Auth<'a> {
 impl Auth<'_> {
     pub fn new() -> Self {
         Self {
-            reqwest_client: Client::new(),
             client_id: "a3d0ef008fba45e8b7465f5e102628ee",
             client_secret: "9db64416ca374bc5abfc5196e39ce8de",
         }
@@ -23,7 +20,7 @@ impl Auth<'_> {
 
     pub async fn sign_in(&self) -> result::Result<(), Box<dyn error::Error>> {
         let resp = GetQRCodeRequest::new(self.client_id, self.client_secret)
-            .dispatch(&self.reqwest_client, None, None)
+            .dispatch(None, None)
             .await?;
 
         println!("########################################");
@@ -32,7 +29,7 @@ impl Auth<'_> {
 
         let auth_code = loop {
             let resp = GetQRCodeStatusRequest { sid: &resp.sid }
-                .dispatch(&self.reqwest_client, None, None)
+                .dispatch(None, None)
                 .await?;
             match resp.status {
                 QRCodeStatus::WaitLogin => println!("等待扫码登陆..."),
@@ -57,7 +54,7 @@ impl Auth<'_> {
             Some(&auth_code.unwrap()),
             None,
         )
-        .dispatch(&self.reqwest_client, None, None)
+        .dispatch(None, None)
         .await?;
         println!("{:#?}", resp);
 
@@ -77,7 +74,7 @@ impl Auth<'_> {
             None,
             Some(&token.refresh_token),
         )
-        .dispatch(&self.reqwest_client, None, None)
+        .dispatch(None, None)
         .await?;
         self.dump(&resp)?;
         Ok(resp)

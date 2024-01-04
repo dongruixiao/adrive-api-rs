@@ -1,4 +1,3 @@
-use crate::constants::DOMAIN;
 use crate::data_structures::Request;
 use chrono::{DateTime, Utc};
 use reqwest::{Method, Url};
@@ -57,7 +56,7 @@ impl Request for GetQRCodeImageRequest<'_> {
 
     fn path_join(&self) -> std::result::Result<url::Url, Box<dyn std::error::Error>> {
         let uri = Self::URI.replace("{sid}", self.sid);
-        let path = Url::parse(DOMAIN)?.join(&uri)?;
+        let path = Url::parse(Self::DOMAIN)?.join(&uri)?;
         Ok(path)
     }
 }
@@ -98,7 +97,7 @@ impl Request for GetQRCodeStatusRequest<'_> {
 
     fn path_join(&self) -> std::result::Result<url::Url, Box<dyn std::error::Error>> {
         let uri = Self::URI.replace("{sid}", self.sid);
-        let path = Url::parse(DOMAIN)?.join(&uri)?;
+        let path = Url::parse(Self::DOMAIN)?.join(&uri)?;
         Ok(path)
     }
 }
