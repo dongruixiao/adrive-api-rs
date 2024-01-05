@@ -3,8 +3,9 @@ use crate::data_structures::{GetQRCodeRequest, GetQRCodeStatusRequest, QRCodeSta
 use std::path::PathBuf;
 use std::{thread, time};
 
+use crate::Result;
 use chrono::Utc;
-use std::{error, result};
+
 pub struct Auth<'a> {
     client_id: &'a str,
     client_secret: &'a str,
@@ -18,13 +19,13 @@ impl Auth<'_> {
         }
     }
 
-    pub async fn sign_in(&self) -> result::Result<(), Box<dyn error::Error>> {
+    pub async fn sign_in(&self) -> Result<()> {
         let resp = GetQRCodeRequest::new(self.client_id, self.client_secret)
             .dispatch(None, None)
             .await?;
 
         println!("########################################");
-        println!("### 浏览器扫码登陆: {}", resp.qr_code_url);
+        println!("### 浏览器扫码登陆：{}", resp.qr_code_url);
         println!("########################################");
 
         let auth_code = loop {
@@ -59,14 +60,14 @@ impl Auth<'_> {
         println!("{:#?}", resp);
 
         println!("########################################");
-        println!("### 登陆成功: {}", resp.access_token);
+        println!("### 登陆成功：{}", resp.access_token);
         println!("########################################");
 
         self.dump(&resp)?;
         Ok(())
     }
 
-    async fn refresh_token(&self) -> result::Result<GetAccessTokenResponse, Box<dyn error::Error>> {
+    async fn refresh_token(&self) -> Result<GetAccessTokenResponse> {
         let token = Self::load()?;
         let resp = GetAccessTokenRequest::new(
             self.client_id,
@@ -80,9 +81,7 @@ impl Auth<'_> {
         Ok(resp)
     }
 
-    pub async fn refresh_if_needed(
-        &self,
-    ) -> result::Result<GetAccessTokenResponse, Box<dyn error::Error>> {
+    pub async fn refresh_if_needed(&self) -> Result<GetAccessTokenResponse> {
         let token = Self::load()?;
         if Utc::now().timestamp() - token.time.timestamp() >= token.expires_in {
             let token = self.refresh_token().await?;
@@ -98,10 +97,7 @@ impl Auth<'_> {
             .join("adrive-api-rs/credentials")
     }
 
-    pub fn dump(
-        &self,
-        token: &GetAccessTokenResponse,
-    ) -> result::Result<(), Box<dyn error::Error>> {
+    pub fn dump(&self, token: &GetAccessTokenResponse) -> Result<()> {
         let path = &Self::path();
         if !path.exists() {
             std::fs::create_dir_all(path.parent().expect("no parent dir detected"))?;
@@ -113,7 +109,7 @@ impl Auth<'_> {
         Ok(())
     }
 
-    pub fn load() -> result::Result<GetAccessTokenResponse, Box<dyn error::Error>> {
+    pub fn load() -> Result<GetAccessTokenResponse> {
         let file = std::fs::File::open(Self::path())?;
         let token: GetAccessTokenResponse = serde_json::from_reader(file)?;
         Ok(token)

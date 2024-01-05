@@ -10,7 +10,9 @@ use data_structures::{
     GetFileStarredListRequest, GetFileStarredListResponse, GetSpaceInfoRequest,
     GetSpaceInfoResponse, GetUserInfoRequest, GetUserInfoResponse, Request,
 };
-use std::{error, path, result};
+use std::{error, result};
+
+type Result<T> = result::Result<T, Box<dyn error::Error>>;
 
 pub struct ADriveAPI<'a> {
     auth: auth::Auth<'a>,
@@ -23,7 +25,7 @@ impl ADriveAPI<'_> {
         }
     }
 
-    pub async fn user_info(&self) -> result::Result<GetUserInfoResponse, Box<dyn error::Error>> {
+    pub async fn user_info(&self) -> Result<GetUserInfoResponse> {
         let token = self.auth.refresh_if_needed().await?;
         let resp = GetUserInfoRequest {}
             .dispatch(None, Some(&token.access_token))
@@ -31,7 +33,7 @@ impl ADriveAPI<'_> {
         Ok(resp)
     }
 
-    pub async fn drive_info(&self) -> result::Result<GetDriveInfoResponse, Box<dyn error::Error>> {
+    pub async fn drive_info(&self) -> Result<GetDriveInfoResponse> {
         let token = self.auth.refresh_if_needed().await?;
         let resp = GetDriveInfoRequest {}
             .dispatch(None, Some(&token.access_token))
@@ -39,7 +41,7 @@ impl ADriveAPI<'_> {
         Ok(resp)
     }
 
-    pub async fn space_info(&self) -> result::Result<GetSpaceInfoResponse, Box<dyn error::Error>> {
+    pub async fn space_info(&self) -> Result<GetSpaceInfoResponse> {
         let token: data_structures::GetAccessTokenResponse = self.auth.refresh_if_needed().await?;
         let resp = GetSpaceInfoRequest {}
             .dispatch(None, Some(&token.access_token))
@@ -47,15 +49,15 @@ impl ADriveAPI<'_> {
         Ok(resp)
     }
 
-    pub async fn get_default_drive_id(&self) -> result::Result<String, Box<dyn error::Error>> {
+    pub async fn get_default_drive_id(&self) -> Result<String> {
         Ok(self.drive_info().await?.default_drive_id)
     }
 
-    pub async fn get_resource_drive_id(&self) -> result::Result<String, Box<dyn error::Error>> {
+    pub async fn get_resource_drive_id(&self) -> Result<String> {
         Ok(self.drive_info().await?.resource_drive_id.unwrap())
     }
 
-    pub async fn get_backup_drive_id(&self) -> result::Result<String, Box<dyn error::Error>> {
+    pub async fn get_backup_drive_id(&self) -> Result<String> {
         Ok(self.drive_info().await?.backup_drive_id.unwrap())
     }
 
@@ -63,7 +65,7 @@ impl ADriveAPI<'_> {
         &self,
         drive_id: &str,
         parent_file_id: &str,
-    ) -> result::Result<GetFileListResponse, Box<dyn error::Error>> {
+    ) -> Result<GetFileListResponse> {
         let token = self.auth.refresh_if_needed().await?;
         let resp = GetFileListRequest::new(drive_id, parent_file_id)
             .dispatch(None, Some(&token.access_token))
@@ -75,7 +77,7 @@ impl ADriveAPI<'_> {
         &mut self,
         drive_id: &str,
         query: &str,
-    ) -> result::Result<FileSearchingResponse, Box<dyn error::Error>> {
+    ) -> Result<FileSearchingResponse> {
         let token = self.auth.refresh_if_needed().await?;
         let resp = FileSearchingRequest::new(drive_id, Some(query))
             .dispatch(None, Some(&token.access_token))
@@ -86,7 +88,7 @@ impl ADriveAPI<'_> {
     pub async fn get_starred_file_list(
         &self,
         drive_id: &str,
-    ) -> result::Result<GetFileStarredListResponse, Box<dyn error::Error>> {
+    ) -> Result<GetFileStarredListResponse> {
         let token = self.auth.refresh_if_needed().await?;
         let resp = GetFileStarredListRequest::new(drive_id)
             .dispatch(None, Some(&token.access_token))
@@ -98,7 +100,7 @@ impl ADriveAPI<'_> {
         &self,
         drive_id: &str,
         file_id: &str,
-    ) -> result::Result<GetFileDetailResponse, Box<dyn error::Error>> {
+    ) -> Result<GetFileDetailResponse> {
         let token = self.auth.refresh_if_needed().await?;
         GetFileDetailByIdRequest::new(drive_id, file_id)
             .dispatch(None, Some(&token.access_token))
@@ -109,7 +111,7 @@ impl ADriveAPI<'_> {
         &self,
         drive_id: &str,
         path: &str,
-    ) -> result::Result<GetFileDetailResponse, Box<dyn error::Error>> {
+    ) -> Result<GetFileDetailResponse> {
         let token = self.auth.refresh_if_needed().await?;
         GetFileDetailByPathRequest::new(drive_id, path)
             .dispatch(None, Some(&token.access_token))
@@ -120,7 +122,7 @@ impl ADriveAPI<'_> {
         &self,
         drive_ids: &[&str],
         file_ids: &[&str],
-    ) -> result::Result<BatchGetFileDetailByIdResponse, Box<dyn error::Error>> {
+    ) -> Result<BatchGetFileDetailByIdResponse> {
         let token = self.auth.refresh_if_needed().await?;
         let mut file_list = Vec::new();
         let zipper = drive_ids.iter().zip(file_ids.iter());
@@ -136,7 +138,7 @@ impl ADriveAPI<'_> {
         &self,
         drive_id: &str,
         file_id: &str,
-    ) -> result::Result<GetDownloadUrlByIdResponse, Box<dyn error::Error>> {
+    ) -> Result<GetDownloadUrlByIdResponse> {
         let token = self.auth.refresh_if_needed().await?;
         GetDownloadUrlByIdRequest::new(drive_id, file_id)
             .dispatch(None, Some(&token.access_token))

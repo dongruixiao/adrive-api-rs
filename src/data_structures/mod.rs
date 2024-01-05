@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod file;
 pub mod user;
+use crate::Result;
 use async_trait::async_trait;
 pub use auth::*;
 pub use file::*;
@@ -8,7 +9,6 @@ use reqwest::{header::HeaderMap, Client, Method, Url};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::sync::OnceLock;
-use std::{error, result};
 pub use user::*;
 
 pub static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
@@ -28,7 +28,7 @@ pub trait Request: Sized + Serialize {
         &self,
         headers: Option<HeaderMap>,
         token: Option<&str>,
-    ) -> result::Result<Self::Response, Box<dyn error::Error>> {
+    ) -> Result<Self::Response> {
         match Self::METHOD {
             Method::GET => self.get(headers, token).await,
             Method::POST => self.post(headers, token).await,
@@ -40,7 +40,7 @@ pub trait Request: Sized + Serialize {
         &self,
         headers: Option<HeaderMap>,
         token: Option<&str>,
-    ) -> result::Result<Self::Response, Box<dyn error::Error>> {
+    ) -> Result<Self::Response> {
         let path = self.path_join()?;
         let resp = Self::reqwest_client()
             .post(path)
@@ -54,11 +54,7 @@ pub trait Request: Sized + Serialize {
         Ok(resp)
     }
 
-    async fn get(
-        &self,
-        headers: Option<HeaderMap>,
-        token: Option<&str>,
-    ) -> result::Result<Self::Response, Box<dyn error::Error>> {
+    async fn get(&self, headers: Option<HeaderMap>, token: Option<&str>) -> Result<Self::Response> {
         let path = self.path_join()?;
         let resp = Self::reqwest_client()
             .get(path)
@@ -72,7 +68,7 @@ pub trait Request: Sized + Serialize {
         Ok(resp)
     }
 
-    fn path_join(&self) -> result::Result<Url, Box<dyn error::Error>> {
+    fn path_join(&self) -> Result<Url> {
         let path = Url::parse(Self::DOMAIN)?.join(Self::URI)?;
         Ok(path)
     }
