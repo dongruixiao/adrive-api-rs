@@ -3,19 +3,25 @@ pub mod constants;
 pub mod data_structures;
 
 use data_structures::{
-    BatchGetFileDetailByIdRequest, BatchGetFileDetailByIdResponse, FileSearchingRequest,
-    FileSearchingResponse, GetDownloadUrlByIdRequest, GetDownloadUrlByIdResponse,
-    GetDriveInfoRequest, GetDriveInfoResponse, GetFileDetailByIdRequest,
-    GetFileDetailByPathRequest, GetFileDetailResponse, GetFileListRequest, GetFileListResponse,
-    GetFileStarredListRequest, GetFileStarredListResponse, GetSpaceInfoRequest,
-    GetSpaceInfoResponse, GetUserInfoRequest, GetUserInfoResponse, Request,
+    BatchGetFileDetailByIdRequest, BatchGetFileDetailByIdResponse, DownloadFileRequest,
+    FileSearchingRequest, FileSearchingResponse, GetDownloadUrlByIdRequest,
+    GetDownloadUrlByIdResponse, GetDriveInfoRequest, GetDriveInfoResponse,
+    GetFileDetailByIdRequest, GetFileDetailByPathRequest, GetFileDetailResponse,
+    GetFileListRequest, GetFileListResponse, GetFileStarredListRequest, GetFileStarredListResponse,
+    GetSpaceInfoRequest, GetSpaceInfoResponse, GetUserInfoRequest, GetUserInfoResponse, Request,
 };
-use std::{error, result};
+use std::{error, fs, io::Write, path::PathBuf, result};
 
 type Result<T> = result::Result<T, Box<dyn error::Error>>;
 
 pub struct ADriveAPI<'a> {
     auth: auth::Auth<'a>,
+}
+
+impl Default for ADriveAPI<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ADriveAPI<'_> {
@@ -143,5 +149,35 @@ impl ADriveAPI<'_> {
         GetDownloadUrlByIdRequest::new(drive_id, file_id)
             .dispatch(None, Some(&token.access_token))
             .await
+    }
+
+    pub async fn download_small_file(
+        &self,
+        drive_id: &str,
+        file_id: &str,
+        dst_path: &str,
+    ) -> Result<()> {
+        let token = &self.auth.refresh_if_needed().await?;
+        let url = self
+            .get_download_url_by_file_id(drive_id, file_id)
+            .await?
+            .url;
+        let bytes = DownloadFileRequest { url: &url }
+            .get_original(None, Some(&token.access_token))
+            .await?
+            .bytes()
+            .await?;
+        let dst_path = PathBuf::from(dst_path);
+        if dst_path.is_dir() {
+            return Err("dst_path is a directory".into());
+        }
+        if dst_path.parent().is_none() {
+            return Err("dst_path has no parent".into());
+        } else {
+            fs::create_dir_all(dst_path.parent().unwrap())?;
+        }
+        let mut file = fs::File::create(dst_path)?;
+        let _ = file.write_all(&bytes);
+        Ok(())
     }
 }

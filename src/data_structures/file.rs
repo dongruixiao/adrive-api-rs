@@ -332,3 +332,19 @@ pub struct GetDownloadUrlByIdResponse {
     pub expiration: String,
     pub method: String,
 }
+
+#[derive(Debug, Serialize)]
+pub struct DownloadFileRequest<'a> {
+    #[serde(skip_serializing)]
+    pub url: &'a str,
+}
+
+impl Request for DownloadFileRequest<'_> {
+    const URI: &'static str = "";
+    const METHOD: reqwest::Method = Method::GET;
+    type Response = ();
+
+    fn path_join(&self) -> crate::Result<reqwest::Url> {
+        Ok(reqwest::Url::parse(self.url)?)
+    }
+}

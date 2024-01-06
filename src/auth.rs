@@ -11,6 +11,12 @@ pub struct Auth<'a> {
     client_secret: &'a str,
 }
 
+impl Default for Auth<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Auth<'_> {
     pub fn new() -> Self {
         Self {

@@ -20,10 +20,11 @@ async fn main() {
     //     .await
     //     .unwrap();
     // println!("{:#?}", resp);
-    let resp = ADriveAPI::new()
-        .get_download_url_by_file_id(
+    ADriveAPI::new()
+        .download_small_file(
             &resp.default_drive_id,
-            "63fcd09f609ce464d23944289fd4d583f8ca100b",
+            "64ce64e210a851618e484a07adb4664ba52976d8",
+            "./test/a/b/c",
         )
         .await
         .unwrap();

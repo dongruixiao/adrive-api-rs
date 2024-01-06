@@ -21,7 +21,7 @@ pub trait Request: Sized + Serialize {
     type Response: DeserializeOwned;
 
     fn reqwest_client() -> &'static Client {
-        CLIENT.get_or_init(|| Client::new())
+        CLIENT.get_or_init(Client::new)
     }
 
     async fn dispatch(
@@ -64,6 +64,21 @@ pub trait Request: Sized + Serialize {
             .send()
             .await?
             .json::<Self::Response>()
+            .await?;
+        Ok(resp)
+    }
+
+    async fn get_original(
+        &self,
+        headers: Option<HeaderMap>,
+        token: Option<&str>,
+    ) -> Result<reqwest::Response> {
+        let path = self.path_join()?;
+        let resp = Self::reqwest_client()
+            .get(path)
+            .bearer_auth(token.unwrap_or_default())
+            .headers(headers.unwrap_or_default())
+            .send()
             .await?;
         Ok(resp)
     }
