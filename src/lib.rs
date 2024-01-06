@@ -10,6 +10,7 @@ use data_structures::{
     GetFileListRequest, GetFileListResponse, GetFileStarredListRequest, GetFileStarredListResponse,
     GetSpaceInfoRequest, GetSpaceInfoResponse, GetUserInfoRequest, GetUserInfoResponse, Request,
 };
+
 use std::{error, fs, io::Write, path::PathBuf, result};
 
 type Result<T> = result::Result<T, Box<dyn error::Error>>;
@@ -179,5 +180,33 @@ impl ADriveAPI<'_> {
         let mut file = fs::File::create(dst_path)?;
         let _ = file.write_all(&bytes);
         Ok(())
+    }
+
+    pub async fn download_big_file(
+        &self,
+        drive_id: &str,
+        file_id: &str,
+        dst_path: &str,
+    ) -> Result<()> {
+        let token = &self.auth.refresh_if_needed().await?;
+        let url = self
+            .get_download_url_by_file_id(drive_id, file_id)
+            .await?
+            .url;
+        let stream = DownloadFileRequest { url: &url }
+            .get_original(None, Some(&token.access_token))
+            .await?
+            .bytes_stream();
+        let dst_path = PathBuf::from(dst_path);
+        if dst_path.is_dir() {
+            return Err("dst_path is a directory".into());
+        }
+        if dst_path.parent().is_none() {
+            return Err("dst_path has no parent".into());
+        } else {
+            fs::create_dir_all(dst_path.parent().unwrap())?;
+        }
+        let mut file = fs::File::create(dst_path)?;
+        todo!();
     }
 }
