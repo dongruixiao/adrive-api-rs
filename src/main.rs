@@ -7,7 +7,6 @@ async fn main() {
     // let resp = ADriveAPI::new().user_info().await.unwrap();
     // println!("{:#?}", resp);
     let resp = ADriveAPI::new().drive_info().await.unwrap();
-    println!("{:#?}", resp);
     // let resp = ADriveAPI::new().space_info().await.unwrap();
     // println!("{:#?}", resp);
     // let resp = ADriveAPI::new()
@@ -20,11 +19,18 @@ async fn main() {
     //     .await
     //     .unwrap();
     // println!("{:#?}", resp);
-    ADriveAPI::new()
-        .download_small_file(
+    // ADriveAPI::new()
+    //     .download_small_file(
+    //         &resp.default_drive_id,
+    //         "64ce64e210a851618e484a07adb4664ba52976d8",
+    //         "./test/a/b/c",
+    //     )
+    //     .await
+    //     .unwrap();
+    let resp = ADriveAPI::new()
+        .delete_file(
             &resp.default_drive_id,
-            "64ce64e210a851618e484a07adb4664ba52976d8",
-            "./test/a/b/c",
+            "643ab76dae9d2499e8fd482b87723dc423e8702e",
         )
         .await
         .unwrap();

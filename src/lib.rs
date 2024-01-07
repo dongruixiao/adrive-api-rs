@@ -3,15 +3,23 @@ pub mod constants;
 pub mod data_structures;
 
 use data_structures::{
-    BatchGetFileDetailByIdRequest, BatchGetFileDetailByIdResponse, DownloadFileRequest,
-    FileSearchingRequest, FileSearchingResponse, GetDownloadUrlByIdRequest,
-    GetDownloadUrlByIdResponse, GetDriveInfoRequest, GetDriveInfoResponse,
-    GetFileDetailByIdRequest, GetFileDetailByPathRequest, GetFileDetailResponse,
-    GetFileListRequest, GetFileListResponse, GetFileStarredListRequest, GetFileStarredListResponse,
-    GetSpaceInfoRequest, GetSpaceInfoResponse, GetUserInfoRequest, GetUserInfoResponse, Request,
+    BatchGetFileDetailByIdRequest, BatchGetFileDetailByIdResponse, CompleteUploadRequest,
+    CompleteUploadResponse, CopyFileRequest, CopyFileResponse, DeleteFileRequest,
+    DeleteFileResponse, DownloadFileRequest, FileSearchingRequest, FileSearchingResponse,
+    FlushUploadUrlRequest, FlushUploadUrlResponse, GetAsyncTaskStateRequest,
+    GetAsyncTaskStateResponse, GetDownloadUrlByIdRequest, GetDownloadUrlByIdResponse,
+    GetDriveInfoRequest, GetDriveInfoResponse, GetFileDetailByIdRequest,
+    GetFileDetailByPathRequest, GetFileDetailResponse, GetFileListRequest, GetFileListResponse,
+    GetFileStarredListRequest, GetFileStarredListResponse, GetSpaceInfoRequest,
+    GetSpaceInfoResponse, GetUploadUrlRequest, GetUploadUrlResponse, GetUserInfoRequest,
+    GetUserInfoResponse, ListUploadedPartsRequest, ListUploadedPartsResponse, MoveFileRequest,
+    MoveFileResponse, MoveFileToRecycleBinRequest, MoveFileToRecycleBinResponse, Request,
+    UpdateFileRequest, UpdateFileResponse,
 };
 
 use std::{error, fs, io::Write, path::PathBuf, result};
+
+use crate::data_structures::FileType;
 
 type Result<T> = result::Result<T, Box<dyn error::Error>>;
 
@@ -193,7 +201,7 @@ impl ADriveAPI<'_> {
             .get_download_url_by_file_id(drive_id, file_id)
             .await?
             .url;
-        let stream = DownloadFileRequest { url: &url }
+        let _stream = DownloadFileRequest { url: &url }
             .get_original(None, Some(&token.access_token))
             .await?
             .bytes_stream();
@@ -206,7 +214,158 @@ impl ADriveAPI<'_> {
         } else {
             fs::create_dir_all(dst_path.parent().unwrap())?;
         }
-        let mut file = fs::File::create(dst_path)?;
+        let _file = fs::File::create(dst_path)?;
         todo!();
+    }
+
+    // 只能创建单层文件夹
+    pub async fn create_dir(
+        &self,
+        drive_id: &str,
+        parent_file_id: &str,
+        dir_name: &str,
+    ) -> Result<GetUploadUrlResponse> {
+        let token = &self.auth.refresh_if_needed().await?;
+        GetUploadUrlRequest::new(drive_id, parent_file_id, dir_name, FileType::Folder)
+            .dispatch(None, Some(&token.access_token))
+            .await
+    }
+
+    // src path 只能是单层文件夹路径或者单层文件路径
+    pub async fn get_upload_url(
+        &self,
+        drive_id: &str,
+        parent_file_id: &str,
+        file_name: &str,
+    ) -> Result<GetUploadUrlResponse> {
+        let metadata = fs::metadata(file_name)?;
+        if metadata.is_dir() {
+            self.create_dir(drive_id, parent_file_id, file_name).await
+        } else if metadata.is_file() {
+            let token = &self.auth.refresh_if_needed().await?;
+            return GetUploadUrlRequest::new(drive_id, parent_file_id, file_name, FileType::File)
+                .dispatch(None, Some(&token.access_token))
+                .await;
+        } else {
+            return Err("src_path is not a file or a directory".into());
+        }
+    }
+
+    pub async fn flush_upload_url(
+        &self,
+        drive_id: &str,
+        file_id: &str,
+        upload_id: &str,
+        part_number_list: &[u16],
+    ) -> Result<FlushUploadUrlResponse> {
+        let token = &self.auth.refresh_if_needed().await?;
+        FlushUploadUrlRequest::new(drive_id, file_id, upload_id, part_number_list)
+            .dispatch(None, Some(&token.access_token))
+            .await
+    }
+
+    pub async fn list_uploaded_parts(
+        &self,
+        drive_id: &str,
+        file_id: &str,
+        upload_id: &str,
+    ) -> Result<ListUploadedPartsResponse> {
+        let token = &self.auth.refresh_if_needed().await?;
+        ListUploadedPartsRequest::new(drive_id, file_id, upload_id)
+            .dispatch(None, Some(&token.access_token))
+            .await
+    }
+
+    pub async fn complete_upload(
+        &self,
+        drive_id: &str,
+        file_id: &str,
+        upload_id: &str,
+    ) -> Result<CompleteUploadResponse> {
+        let token = &self.auth.refresh_if_needed().await?;
+        CompleteUploadRequest::new(drive_id, file_id, upload_id)
+            .dispatch(None, Some(&token.access_token))
+            .await
+    }
+
+    pub async fn starred_file(&self, drive_id: &str, file_id: &str) -> Result<UpdateFileResponse> {
+        let token = &self.auth.refresh_if_needed().await?;
+        UpdateFileRequest::new(drive_id, file_id, None, None, Some(true))
+            .dispatch(None, Some(&token.access_token))
+            .await
+    }
+
+    pub async fn unstarred_file(
+        &self,
+        drive_id: &str,
+        file_id: &str,
+    ) -> Result<UpdateFileResponse> {
+        let token = &self.auth.refresh_if_needed().await?;
+        UpdateFileRequest::new(drive_id, file_id, None, None, Some(false))
+            .dispatch(None, Some(&token.access_token))
+            .await
+    }
+
+    pub async fn rename_file(
+        &self,
+        drive_id: &str,
+        file_id: &str,
+        new_name: &str,
+    ) -> Result<UpdateFileResponse> {
+        let token = &self.auth.refresh_if_needed().await?;
+        UpdateFileRequest::new(drive_id, file_id, Some(new_name), None, None)
+            .dispatch(None, Some(&token.access_token))
+            .await
+    }
+
+    pub async fn move_file(
+        &self,
+        drive_id: &str,
+        file_id: &str,
+        dst_parent_id: &str,
+    ) -> Result<MoveFileResponse> {
+        let token = &self.auth.refresh_if_needed().await?;
+        MoveFileRequest::new(drive_id, file_id, dst_parent_id)
+            .dispatch(None, Some(&token.access_token))
+            .await
+    }
+
+    pub async fn copy_file(
+        &self,
+        drive_id: &str,
+        file_id: &str,
+        dst_parent_id: &str,
+    ) -> Result<CopyFileResponse> {
+        let token = &self.auth.refresh_if_needed().await?;
+        CopyFileRequest::new(drive_id, file_id, dst_parent_id)
+            .dispatch(None, Some(&token.access_token))
+            .await
+    }
+
+    pub async fn put_in_recylebin(
+        &self,
+        drive_id: &str,
+        file_id: &str,
+    ) -> Result<MoveFileToRecycleBinResponse> {
+        let token = &self.auth.refresh_if_needed().await?;
+        MoveFileToRecycleBinRequest::new(drive_id, file_id)
+            .dispatch(None, Some(&token.access_token))
+            .await
+    }
+
+    pub async fn delete_file(&self, drive_id: &str, file_id: &str) -> Result<DeleteFileResponse> {
+        let token = &self.auth.refresh_if_needed().await?;
+        DeleteFileRequest { drive_id, file_id }
+            .dispatch(None, Some(&token.access_token))
+            .await
+    }
+
+    pub async fn get_async_task_state(&self, task_id: &str) -> Result<GetAsyncTaskStateResponse> {
+        let token = &self.auth.refresh_if_needed().await?;
+        GetAsyncTaskStateRequest {
+            async_task_id: task_id,
+        }
+        .dispatch(None, Some(&token.access_token))
+        .await
     }
 }
