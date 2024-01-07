@@ -17,9 +17,9 @@ use data_structures::{
     UpdateFileRequest, UpdateFileResponse,
 };
 
-use std::{error, fs, io::Write, path::PathBuf, result};
-
 use crate::data_structures::FileType;
+use std::sync::OnceLock;
+use std::{error, fs, io::Write, path::PathBuf, result};
 
 type Result<T> = result::Result<T, Box<dyn error::Error>>;
 
@@ -32,6 +32,8 @@ impl Default for ADriveAPI<'_> {
         Self::new()
     }
 }
+
+pub static TOKIO_RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 
 impl ADriveAPI<'_> {
     pub fn new() -> Self {
@@ -214,8 +216,53 @@ impl ADriveAPI<'_> {
         } else {
             fs::create_dir_all(dst_path.parent().unwrap())?;
         }
-        let _file = fs::File::create(dst_path)?;
-        todo!();
+        let mut _file = fs::File::create(dst_path)?;
+        let from = "100";
+        let to = "200";
+        let url = self
+            .get_download_url_by_file_id(drive_id, file_id)
+            .await?
+            .url
+            .to_owned();
+        // let task = Self::runtime().spawn(async move {
+        //     self.write_chunk(&url, &mut _file, Some(from), Some(to))
+        //         .await;
+        // });
+        Ok(())
+    }
+
+    fn runtime() -> &'static tokio::runtime::Runtime {
+        TOKIO_RUNTIME.get_or_init(|| {
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(10)
+                .enable_all()
+                .build()
+                .unwrap()
+        })
+    }
+
+    pub async fn write_chunk(
+        &self,
+        url: &str,
+        file: &mut fs::File,
+        from: Option<&str>,
+        to: Option<&str>,
+    ) -> Result<usize> {
+        let token = &self.auth.refresh_if_needed().await?;
+        let mut headers = reqwest::header::HeaderMap::new();
+        if from.is_some() || to.is_some() {
+            headers.insert(
+                "Range",
+                format!("bytes={}-{}", from.unwrap_or("0"), to.unwrap_or("")).parse()?,
+            );
+        }
+        let bytes = DownloadFileRequest { url: &url }
+            .get_original(Some(headers), Some(&token.access_token))
+            .await
+            .unwrap()
+            .bytes()
+            .await?;
+        Ok(file.write(&bytes)?)
     }
 
     // 只能创建单层文件夹
