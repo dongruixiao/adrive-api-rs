@@ -33,7 +33,7 @@ async fn main() {
         .download_big_file(
             id,
             // "63fcd09f609ce464d23944289fd4d583f8ca100b",
-            "62e8920f61dc3a4b20e841bbb05239862cdff8a4",
+            "64c1130b27cf0ebef36a48dc940f2c353cbbc86b",
             "./test/a/b/c.mp4",
         )
         .await
@@ -45,7 +45,7 @@ async fn main() {
         .download_small_file(
             id,
             // "63fcd09f609ce464d23944289fd4d583f8ca100b",
-            "62e8920f61dc3a4b20e841bbb05239862cdff8a4",
+            "64c1130b27cf0ebef36a48dc940f2c353cbbc86b",
             "./test/a/b/d.mp4",
         )
         .await

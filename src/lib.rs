@@ -238,6 +238,7 @@ impl ADriveAPI<'_> {
                         file_clone,
                         Some(&from.to_string()),
                         Some(&to.to_string()),
+                        detail.size,
                     )
                     .await;
                 });
@@ -270,14 +271,25 @@ impl ADriveAPI<'_> {
         file: Arc<Mutex<fs::File>>,
         from: Option<&str>,
         to: Option<&str>,
+        size: u64,
     ) -> Result<usize> {
         let mut headers = reqwest::header::HeaderMap::new();
-        if from.is_some() || to.is_some() {
-            headers.insert(
-                "Range",
-                format!("bytes={}-{}", from.unwrap_or("0"), to.unwrap_or("")).parse()?,
-            );
-        }
+        headers.insert(
+            "Range",
+            format!(
+                "bytes={}-{}",
+                from.unwrap(),
+                to.and_then(|v| {
+                    if v.parse::<u64>().unwrap() == size {
+                        Some("")
+                    } else {
+                        to
+                    }
+                })
+                .unwrap()
+            )
+            .parse()?,
+        );
         let bytes = DownloadFileRequest { url: &url }
             .get_original(Some(headers), Some(&token))
             .await
@@ -286,7 +298,8 @@ impl ADriveAPI<'_> {
             .await?;
         let mut file_guard = file.lock().unwrap();
         file_guard.seek(SeekFrom::Start(from.unwrap().parse::<u64>()?))?;
-        Ok(file_guard.write(&bytes)?)
+        let count = file_guard.write(&bytes)?;
+        Ok(count)
     }
 
     // 只能创建单层文件夹
