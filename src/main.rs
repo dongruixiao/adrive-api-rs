@@ -27,12 +27,28 @@ async fn main() {
     //     )
     //     .await
     //     .unwrap();
+    let id = &resp.default_drive_id;
+    let st = std::time::Instant::now();
     let resp = ADriveAPI::new()
-        .delete_file(
-            &resp.default_drive_id,
-            "643ab76dae9d2499e8fd482b87723dc423e8702e",
+        .download_big_file(
+            id,
+            // "63fcd09f609ce464d23944289fd4d583f8ca100b",
+            "62e8920f61dc3a4b20e841bbb05239862cdff8a4",
+            "./test/a/b/c.mp4",
         )
         .await
         .unwrap();
-    println!("{:#?}", resp);
+    let ed = std::time::Instant::now();
+    println!("{:?}", ed - st);
+
+    let resp = ADriveAPI::new()
+        .download_small_file(
+            id,
+            // "63fcd09f609ce464d23944289fd4d583f8ca100b",
+            "62e8920f61dc3a4b20e841bbb05239862cdff8a4",
+            "./test/a/b/d.mp4",
+        )
+        .await
+        .unwrap();
+    println!("{:#?}", std::time::Instant::now() - ed);
 }

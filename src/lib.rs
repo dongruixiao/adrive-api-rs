@@ -18,7 +18,8 @@ use data_structures::{
 };
 
 use crate::data_structures::FileType;
-use std::sync::OnceLock;
+use std::io::{Seek, SeekFrom};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::{error, fs, io::Write, path::PathBuf, result};
 
 type Result<T> = result::Result<T, Box<dyn error::Error>>;
@@ -198,7 +199,7 @@ impl ADriveAPI<'_> {
         file_id: &str,
         dst_path: &str,
     ) -> Result<()> {
-        let token = &self.auth.refresh_if_needed().await?;
+        let token = self.auth.refresh_if_needed().await?;
         let url = self
             .get_download_url_by_file_id(drive_id, file_id)
             .await?
@@ -216,18 +217,40 @@ impl ADriveAPI<'_> {
         } else {
             fs::create_dir_all(dst_path.parent().unwrap())?;
         }
-        let mut _file = fs::File::create(dst_path)?;
-        let from = "100";
-        let to = "200";
-        let url = self
-            .get_download_url_by_file_id(drive_id, file_id)
-            .await?
-            .url
-            .to_owned();
-        // let task = Self::runtime().spawn(async move {
-        //     self.write_chunk(&url, &mut _file, Some(from), Some(to))
-        //         .await;
-        // });
+        let file = Arc::new(Mutex::new(fs::File::create(dst_path)?));
+        let detail = GetFileDetailByIdRequest::new(drive_id, file_id)
+            .dispatch(None, Some(&token.access_token))
+            .await?;
+        let mut from = 0;
+        let offset = 10 * 1024 * 1024 - 1; // 10MB
+        let mut tasks = Vec::new();
+        loop {
+            let to = from + offset;
+            let url = url.clone();
+            let token = token.access_token.clone();
+            let file_clone = Arc::clone(&file);
+            if from <= detail.size {
+                let to = if to > detail.size { detail.size } else { to };
+                let task = Self::runtime().spawn(async move {
+                    let _ = Self::write_chunk(
+                        &url,
+                        &token,
+                        file_clone,
+                        Some(&from.to_string()),
+                        Some(&to.to_string()),
+                    )
+                    .await;
+                });
+                tasks.push(task);
+                from = to + 1;
+            } else {
+                break;
+            }
+        }
+        for task in tasks {
+            task.await?;
+        }
+
         Ok(())
     }
 
@@ -241,14 +264,13 @@ impl ADriveAPI<'_> {
         })
     }
 
-    pub async fn write_chunk(
-        &self,
+    async fn write_chunk(
         url: &str,
-        file: &mut fs::File,
+        token: &str,
+        file: Arc<Mutex<fs::File>>,
         from: Option<&str>,
         to: Option<&str>,
     ) -> Result<usize> {
-        let token = &self.auth.refresh_if_needed().await?;
         let mut headers = reqwest::header::HeaderMap::new();
         if from.is_some() || to.is_some() {
             headers.insert(
@@ -257,12 +279,14 @@ impl ADriveAPI<'_> {
             );
         }
         let bytes = DownloadFileRequest { url: &url }
-            .get_original(Some(headers), Some(&token.access_token))
+            .get_original(Some(headers), Some(&token))
             .await
             .unwrap()
             .bytes()
             .await?;
-        Ok(file.write(&bytes)?)
+        let mut file_guard = file.lock().unwrap();
+        file_guard.seek(SeekFrom::Start(from.unwrap().parse::<u64>()?))?;
+        Ok(file_guard.write(&bytes)?)
     }
 
     // 只能创建单层文件夹
