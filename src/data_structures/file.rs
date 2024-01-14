@@ -367,6 +367,16 @@ pub struct PartInfo {
     pub part_size: Option<u32>,
 }
 
+impl Request for PartInfo {
+    const URI: &'static str = "";
+    const METHOD: reqwest::Method = Method::PUT;
+    type Response = ();
+
+    fn path_join(&self) -> crate::Result<url::Url> {
+        Ok(reqwest::Url::parse(self.upload_url.as_ref().unwrap())?)
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StreamsInfo {
     pub content_hash: Option<String>,
@@ -403,12 +413,14 @@ impl<'a> GetUploadUrlRequest<'a> {
         parent_file_id: &'a str,
         name: &'a str,
         r#type: FileType,
+        part_info_list: Option<Vec<PartInfo>>,
     ) -> Self {
         Self {
             drive_id,
             parent_file_id,
             name,
             r#type,
+            part_info_list,
             ..Default::default()
         }
     }
@@ -501,7 +513,7 @@ impl<'a> ListUploadedPartsRequest<'a> {
 impl Request for ListUploadedPartsRequest<'_> {
     const URI: &'static str = "/adrive/v1.0/openFile/listUploadedParts";
     const METHOD: reqwest::Method = Method::POST;
-    type Response = ListUploadedPartsResponse;
+    type Response = serde_json::Value;
 }
 
 #[derive(Debug, Deserialize)]

@@ -19,36 +19,53 @@ async fn main() {
     //     .await
     //     .unwrap();
     // println!("{:#?}", resp);
-    // ADriveAPI::new()
+    // let resp = ADriveAPI::new()
     //     .download_small_file(
     //         &resp.default_drive_id,
-    //         "64ce64e210a851618e484a07adb4664ba52976d8",
-    //         "./test/a/b/c",
+    //         "65a3f073c16f7706600147ad8f63010bed3ee312",
+    //         "../test.file.alipan",
     //     )
     //     .await
     //     .unwrap();
     let id = &resp.default_drive_id;
-    let st = std::time::Instant::now();
-    let resp = ADriveAPI::new()
-        .download_big_file(
-            id,
-            // "63fcd09f609ce464d23944289fd4d583f8ca100b",
-            "64c1130b27cf0ebef36a48dc940f2c353cbbc86b",
-            "./test/a/b/c.mp4",
-        )
-        .await
-        .unwrap();
-    let ed = std::time::Instant::now();
-    println!("{:?}", ed - st);
+    // let st = std::time::Instant::now();
+    // let resp = ADriveAPI::new()
+    //     .download_big_file(
+    //         id,
+    //         // "63fcd09f609ce464d23944289fd4d583f8ca100b",
+    //         "64c1130b27cf0ebef36a48dc940f2c353cbbc86b",
+    //         "./test/a/b/c.mp4",
+    //     )
+    //     .await
+    //     .unwrap();
+    // let ed = std::time::Instant::now();
+    // println!("{:?}", ed - st);
 
+    // let resp = ADriveAPI::new()
+    //     .download_small_file(
+    //         id,
+    //         // "63fcd09f609ce464d23944289fd4d583f8ca100b",
+    //         "64c1130b27cf0ebef36a48dc940f2c353cbbc86b",
+    //         "./test/a/b/d.mp4",
+    //     )
+    //     .await
+    //     .unwrap();
     let resp = ADriveAPI::new()
-        .download_small_file(
+        .multiparts_upload_file(
             id,
-            // "63fcd09f609ce464d23944289fd4d583f8ca100b",
-            "64c1130b27cf0ebef36a48dc940f2c353cbbc86b",
-            "./test/a/b/d.mp4",
+            "root",
+            "/Users/dongruixiao/PlayGround/adrive-api-rs/test.file2",
         )
         .await
         .unwrap();
-    println!("{:#?}", std::time::Instant::now() - ed);
+
+    // let resp = ADriveAPI::new()
+    //     .list_uploaded_parts(
+    //         id,
+    //         "65a2a8ad426e0e52ed3546269143a3a672f45500",
+    //         "B345566FAF804027B89FA0F1E9475258",
+    //     )
+    //     .await
+    //     .unwrap();
+    println!("{:#?}", resp);
 }

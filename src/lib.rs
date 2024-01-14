@@ -13,12 +13,13 @@ use data_structures::{
     GetFileStarredListRequest, GetFileStarredListResponse, GetSpaceInfoRequest,
     GetSpaceInfoResponse, GetUploadUrlRequest, GetUploadUrlResponse, GetUserInfoRequest,
     GetUserInfoResponse, ListUploadedPartsRequest, ListUploadedPartsResponse, MoveFileRequest,
-    MoveFileResponse, MoveFileToRecycleBinRequest, MoveFileToRecycleBinResponse, Request,
+    MoveFileResponse, MoveFileToRecycleBinRequest, MoveFileToRecycleBinResponse, PartInfo, Request,
     UpdateFileRequest, UpdateFileResponse,
 };
+use tokio::task::JoinHandle;
 
-use crate::data_structures::FileType;
-use std::io::{Seek, SeekFrom};
+use crate::data_structures::{FileType, IfNameExists};
+use std::io::{Read, Seek, SeekFrom};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::{error, fs, io::Write, path::PathBuf, result};
 
@@ -258,7 +259,7 @@ impl ADriveAPI<'_> {
     fn runtime() -> &'static tokio::runtime::Runtime {
         TOKIO_RUNTIME.get_or_init(|| {
             tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(10)
+                .worker_threads(1)
                 .enable_all()
                 .build()
                 .unwrap()
@@ -310,7 +311,7 @@ impl ADriveAPI<'_> {
         dir_name: &str,
     ) -> Result<GetUploadUrlResponse> {
         let token = &self.auth.refresh_if_needed().await?;
-        GetUploadUrlRequest::new(drive_id, parent_file_id, dir_name, FileType::Folder)
+        GetUploadUrlRequest::new(drive_id, parent_file_id, dir_name, FileType::Folder, None)
             .dispatch(None, Some(&token.access_token))
             .await
     }
@@ -327,9 +328,15 @@ impl ADriveAPI<'_> {
             self.create_dir(drive_id, parent_file_id, file_name).await
         } else if metadata.is_file() {
             let token = &self.auth.refresh_if_needed().await?;
-            return GetUploadUrlRequest::new(drive_id, parent_file_id, file_name, FileType::File)
-                .dispatch(None, Some(&token.access_token))
-                .await;
+            return GetUploadUrlRequest::new(
+                drive_id,
+                parent_file_id,
+                file_name,
+                FileType::File,
+                None,
+            )
+            .dispatch(None, Some(&token.access_token))
+            .await;
         } else {
             return Err("src_path is not a file or a directory".into());
         }
@@ -353,7 +360,7 @@ impl ADriveAPI<'_> {
         drive_id: &str,
         file_id: &str,
         upload_id: &str,
-    ) -> Result<ListUploadedPartsResponse> {
+    ) -> Result<serde_json::Value> {
         let token = &self.auth.refresh_if_needed().await?;
         ListUploadedPartsRequest::new(drive_id, file_id, upload_id)
             .dispatch(None, Some(&token.access_token))
@@ -370,6 +377,148 @@ impl ADriveAPI<'_> {
         CompleteUploadRequest::new(drive_id, file_id, upload_id)
             .dispatch(None, Some(&token.access_token))
             .await
+    }
+
+    async fn upload_part(
+        part_info: &PartInfo,
+        src_path: &str,
+        token: &str,
+        part_size: Option<u64>,
+    ) -> Result<()> {
+        let mut file = fs::File::open(src_path)?;
+        let mut buffer = Vec::new();
+        if part_size.is_none() {
+            let _ = file.read_to_end(&mut buffer);
+        } else {
+            let pos = (part_info.part_number as u64 - 1) * part_size.unwrap();
+            let _ = file.seek(SeekFrom::Start(pos));
+            let _ = file.take(part_size.unwrap()).read_to_end(&mut buffer);
+        }
+        println!("{:#?}", part_info);
+        let _ = PartInfo::reqwest_client()
+            .put(part_info.upload_url.as_ref().unwrap())
+            .body(buffer)
+            .bearer_auth(token)
+            .send()
+            .await?;
+        println!("upload part success");
+        Ok(())
+    }
+
+    pub async fn upload_file(
+        &self,
+        drive_id: &str,
+        parent_file_id: &str,
+        src_path: &str,
+    ) -> Result<()> {
+        let token = &self.auth.refresh_if_needed().await?;
+        let src_path = PathBuf::from(src_path);
+        if src_path.is_dir() {
+            return Err("src_path is a directory".into());
+        }
+        let name = src_path.file_name().unwrap().to_str().unwrap();
+        let resp = GetUploadUrlRequest::new(drive_id, parent_file_id, name, FileType::File, None)
+            .dispatch(None, Some(&token.access_token))
+            .await?;
+
+        let access_token = token.access_token.clone();
+        for part_info in resp.part_info_list.unwrap().iter() {
+            Self::upload_part(part_info, src_path.to_str().unwrap(), &access_token, None).await?;
+        }
+
+        let resp = CompleteUploadRequest::new(drive_id, &resp.file_id, &resp.upload_id.unwrap())
+            .dispatch(None, Some(&access_token))
+            .await?;
+        Ok(())
+    }
+
+    fn get_part_info_list(size: u64) -> Vec<PartInfo> {
+        const DEFAULT_PART_SIZE: u64 = 64 * 1024 * 1024; // 64MB
+        let count = (size + DEFAULT_PART_SIZE - 1) / DEFAULT_PART_SIZE;
+        let part_info_list = (1..=count)
+            .map(|index| PartInfo {
+                part_number: index as u16,
+                part_size: None,
+                upload_url: None,
+            })
+            .collect();
+        part_info_list
+    }
+
+    pub async fn multiparts_upload_file(
+        &self,
+        drive_id: &str,
+        parent_file_id: &str,
+        src_path: &str,
+    ) -> Result<CompleteUploadResponse> {
+        let token = &self.auth.refresh_if_needed().await?;
+        let src_path = PathBuf::from(src_path);
+        if src_path.is_dir() {
+            return Err("src_path is a directory".into());
+        }
+        let name = src_path.file_name().unwrap().to_str().unwrap();
+        let size = fs::File::open(&src_path)?.metadata()?.len();
+        let part_info_list = Self::get_part_info_list(size);
+        let resp = GetUploadUrlRequest::new(
+            drive_id,
+            parent_file_id,
+            name,
+            FileType::File,
+            Some(part_info_list),
+        )
+        .dispatch(None, Some(&token.access_token))
+        .await?;
+
+        println!("{:#?}", resp);
+
+        let src_path = src_path.to_str().unwrap().to_string();
+        // let handles: Vec<JoinHandle<()>> = resp
+        //     .part_info_list
+        //     .unwrap()
+        //     .into_iter()
+        //     .map(|part_info| {
+        //         println!("{:#?}", part_info.part_number);
+        //         let src_path = src_path.clone();
+        //         let token = token.access_token.clone();
+        //         Self::runtime().spawn_blocking(|| async move {
+        //             Self::upload_part(&part_info, &src_path, &token, Some(64 * 1024 * 1024))
+        //                 .await
+        //                 .unwrap()
+        //         })
+        //     })
+        //     // })
+        //     .collect();
+        // for handle in handles {
+        //     handle.await?;
+        // }
+
+        // 因服务端使用流式计算SHA1值，单个文件的分片需要串行上传，不支持多个分片并行上传
+        let mut futures = Vec::new();
+        for part_info in resp.part_info_list.unwrap().into_iter() {
+            println!("{:#?}", part_info.part_number);
+
+            let src_path = src_path.clone();
+            let token = token.access_token.clone();
+            let task = Self::runtime().spawn(async move {
+                Self::upload_part(&part_info, &src_path, &token, Some(64 * 1024 * 1024))
+                    .await
+                    .unwrap();
+            });
+            futures.push(task);
+        }
+        println!("futures len: {}", futures.len());
+        for future in futures {
+            future.await?;
+        }
+        let upload_id = resp.upload_id.unwrap();
+        let r = ListUploadedPartsRequest::new(drive_id, &resp.file_id, &upload_id)
+            .dispatch(None, Some(&token.access_token))
+            .await?;
+        println!("{:#?}", r);
+        let resp = CompleteUploadRequest::new(drive_id, &resp.file_id, &upload_id)
+            .dispatch(None, Some(&token.access_token))
+            .await?;
+        Ok(resp)
     }
 
     pub async fn starred_file(&self, drive_id: &str, file_id: &str) -> Result<UpdateFileResponse> {
