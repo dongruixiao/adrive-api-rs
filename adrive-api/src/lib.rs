@@ -492,7 +492,7 @@ impl ADriveAPI<'_> {
         //     handle.await?;
         // }
 
-        // 因服务端使用流式计算SHA1值，单个文件的分片需要串行上传，不支持多个分片并行上传
+        // 因服务端使用流式计算 SHA1 值，单个文件的分片需要串行上传，不支持多个分片并行上传
         let mut futures = Vec::new();
         for part_info in resp.part_info_list.unwrap().into_iter() {
             println!("{:#?}", part_info.part_number);

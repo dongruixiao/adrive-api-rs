@@ -1,4 +1,4 @@
-use adrive_api_rs::ADriveAPI;
+use adrive_api::ADriveAPI;
 
 #[tokio::main]
 async fn main() {
