@@ -8,4 +8,5 @@ edition = "2021"
 [dependencies]
 adrive-api = { path = "../adrive-api" }
 axum = "0.7.4"
+serde = "1.0.195"
 tokio = "1.35.1"
