@@ -170,3 +170,25 @@ pub struct GetAccessTokenResponse {
     // pub code: String,
     // pub message: String,
 }
+
+#[derive(Debug, Serialize)]
+pub struct GetQRCodeSID;
+
+impl Request for GetQRCodeSID {
+    const DOMAIN: &'static str = "http://localhost:10024";
+    const URI: &'static str = "/sid";
+    const METHOD: Method = Method::GET;
+    type Response = String;
+}
+
+#[derive(Debug, Serialize)]
+pub struct GetQRCodeAccessToken<'a> {
+    pub auth_code: &'a str,
+}
+
+impl Request for GetQRCodeAccessToken<'_> {
+    const DOMAIN: &'static str = "http://localhost:10024";
+    const URI: &'static str = "/token";
+    const METHOD: Method = Method::POST;
+    type Response = GetAccessTokenResponse;
+}

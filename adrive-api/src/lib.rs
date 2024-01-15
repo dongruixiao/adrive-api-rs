@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod auth2;
 pub mod constants;
 pub mod data_structures;
 

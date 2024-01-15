@@ -1,12 +1,12 @@
-use adrive_api::ADriveAPI;
+use adrive_api::auth2::Auth;
 
 #[tokio::main]
 async fn main() {
-    // Auth::new().sign_in().await.unwrap();
+    Auth {}.sign_in().await.unwrap();
     // Auth::new().refresh_if_needed().await.unwrap();
     // let resp = ADriveAPI::new().user_info().await.unwrap();
     // println!("{:#?}", resp);
-    let resp = ADriveAPI::new().drive_info().await.unwrap();
+    // let resp = ADriveAPI::new().drive_info().await.unwrap();
     // let resp = ADriveAPI::new().space_info().await.unwrap();
     // println!("{:#?}", resp);
     // let resp = ADriveAPI::new()
@@ -27,7 +27,7 @@ async fn main() {
     //     )
     //     .await
     //     .unwrap();
-    let id = &resp.default_drive_id;
+    // let id = &resp.default_drive_id;
     // let st = std::time::Instant::now();
     // let resp = ADriveAPI::new()
     //     .download_big_file(
@@ -50,14 +50,14 @@ async fn main() {
     //     )
     //     .await
     //     .unwrap();
-    let resp = ADriveAPI::new()
-        .multiparts_upload_file(
-            id,
-            "root",
-            "/Users/dongruixiao/PlayGround/adrive-api-rs/test.file2",
-        )
-        .await
-        .unwrap();
+    // let resp = ADriveAPI::new()
+    //     .multiparts_upload_file(
+    //         id,
+    //         "root",
+    //         "/Users/dongruixiao/PlayGround/adrive-api-rs/test.file2",
+    //     )
+    //     .await
+    //     .unwrap();
 
     // let resp = ADriveAPI::new()
     //     .list_uploaded_parts(
@@ -67,5 +67,5 @@ async fn main() {
     //     )
     //     .await
     //     .unwrap();
-    println!("{:#?}", resp);
+    // println!("{:#?}", resp);
 }

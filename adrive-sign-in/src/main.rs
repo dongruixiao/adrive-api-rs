@@ -8,7 +8,7 @@ use std::env;
 
 async fn sid() -> String {
     let client_id = env::var("ADRIVE_CLIENT_ID").unwrap();
-    let client_secret = env::var("ADRICE_CLIENT_SECRET").unwrap();
+    let client_secret = env::var("ADRIVE_CLIENT_SECRET").unwrap();
     let resp = GetQRCodeRequest::new(&client_id, &client_secret)
         .dispatch(None, None)
         .await
