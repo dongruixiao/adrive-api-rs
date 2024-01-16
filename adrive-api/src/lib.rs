@@ -13,13 +13,12 @@ use data_structures::{
     GetFileDetailByPathRequest, GetFileDetailResponse, GetFileListRequest, GetFileListResponse,
     GetFileStarredListRequest, GetFileStarredListResponse, GetSpaceInfoRequest,
     GetSpaceInfoResponse, GetUploadUrlRequest, GetUploadUrlResponse, GetUserInfoRequest,
-    GetUserInfoResponse, ListUploadedPartsRequest, ListUploadedPartsResponse, MoveFileRequest,
-    MoveFileResponse, MoveFileToRecycleBinRequest, MoveFileToRecycleBinResponse, PartInfo, Request,
+    GetUserInfoResponse, ListUploadedPartsRequest, MoveFileRequest, MoveFileResponse,
+    MoveFileToRecycleBinRequest, MoveFileToRecycleBinResponse, PartInfo, Request,
     UpdateFileRequest, UpdateFileResponse,
 };
-use tokio::task::JoinHandle;
 
-use crate::data_structures::{FileType, IfNameExists};
+use crate::data_structures::FileType;
 use std::io::{Read, Seek, SeekFrom};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::{error, fs, io::Write, path::PathBuf, result};
@@ -427,7 +426,7 @@ impl ADriveAPI<'_> {
             Self::upload_part(part_info, src_path.to_str().unwrap(), &access_token, None).await?;
         }
 
-        let resp = CompleteUploadRequest::new(drive_id, &resp.file_id, &resp.upload_id.unwrap())
+        let _resp = CompleteUploadRequest::new(drive_id, &resp.file_id, &resp.upload_id.unwrap())
             .dispatch(None, Some(&access_token))
             .await?;
         Ok(())

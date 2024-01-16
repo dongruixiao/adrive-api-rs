@@ -36,7 +36,7 @@ impl Request for GetQRCodeRequest<'_> {
     type Response = GetQRCodeResponse;
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct GetQRCodeResponse {
     #[serde(rename = "qrCodeUrl")]
     pub qr_code_url: String,
@@ -172,23 +172,35 @@ pub struct GetAccessTokenResponse {
 }
 
 #[derive(Debug, Serialize)]
-pub struct GetQRCodeSID;
+pub struct GetQRCodeRequest2;
 
-impl Request for GetQRCodeSID {
+impl Request for GetQRCodeRequest2 {
     const DOMAIN: &'static str = "http://localhost:10024";
     const URI: &'static str = "/sid";
     const METHOD: Method = Method::GET;
-    type Response = String;
+    type Response = GetQRCodeResponse;
 }
 
 #[derive(Debug, Serialize)]
-pub struct GetQRCodeAccessToken<'a> {
+pub struct GetAccessTokenRequest2<'a> {
     pub auth_code: &'a str,
 }
 
-impl Request for GetQRCodeAccessToken<'_> {
+impl Request for GetAccessTokenRequest2<'_> {
     const DOMAIN: &'static str = "http://localhost:10024";
     const URI: &'static str = "/token";
+    const METHOD: Method = Method::POST;
+    type Response = GetAccessTokenResponse;
+}
+
+#[derive(Debug, Serialize)]
+pub struct GetAccessTokenRequest3<'a> {
+    pub refresh_token: &'a str,
+}
+
+impl Request for GetAccessTokenRequest3<'_> {
+    const DOMAIN: &'static str = "http://localhost:10024";
+    const URI: &'static str = "/refresh_token";
     const METHOD: Method = Method::POST;
     type Response = GetAccessTokenResponse;
 }

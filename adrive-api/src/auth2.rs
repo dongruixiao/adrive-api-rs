@@ -1,12 +1,12 @@
 use crate::data_structures::{
-    GetAccessTokenRequest, GetAccessTokenResponse, GetQRCodeImageRequest, GetQRCodeSID, Request,
+    GetAccessTokenRequest2, GetAccessTokenRequest3, GetAccessTokenResponse, GetQRCodeRequest2,
+    Request,
 };
-use crate::data_structures::{GetQRCodeRequest, GetQRCodeStatusRequest, QRCodeStatus};
+use crate::data_structures::{GetQRCodeStatusRequest, QRCodeStatus};
 use std::path::PathBuf;
 use std::{fs, thread, time};
 
 use chrono::Utc;
-use reqwest::header::HeaderMap;
 
 pub struct Auth();
 
@@ -36,66 +36,50 @@ impl Auth {
     }
 
     pub async fn sign_in(&self) -> crate::Result<()> {
-        let sid = GetQRCodeSID {}.dispatch(None, None).await?;
-        println!("{:#?}", sid);
-        // let mut headers = HeaderMap::new();
-        // headers.insert("Content-Type", "image/jpeg".parse()?);
-        // let resp = GetQRCodeImageRequest { sid: &sid }
-        //     .dispatch(Some(headers), None)
-        //     .await?;
-        // println!("{:#?}", resp);
-        // let auth_code = loop {
-        //     let resp = GetQRCodeStatusRequest { sid: &resp.sid }
-        //         .dispatch(None, None)
-        //         .await?;
-        //     match resp.status {
-        //         QRCodeStatus::WaitLogin => println!("等待扫码登陆..."),
-        //         QRCodeStatus::ScanSuccess => println!("扫码成功，等待确认..."),
-        //         QRCodeStatus::LoginSuccess => {
-        //             println!("登陆成功");
-        //             break resp.auth_code;
-        //         }
-        //         QRCodeStatus::QRCodeExpired => {
-        //             println!("二维码已过期");
-        //             break None;
-        //         }
-        //     }
-        //     thread::sleep(time::Duration::from_secs(1))
-        // };
-        // if auth_code.is_none() {
-        //     return Ok(());
-        // }
-        // let resp = GetAccessTokenRequest::new(
-        //     self.client_id,
-        //     self.client_secret,
-        //     Some(&auth_code.unwrap()),
-        //     None,
-        // )
-        // .dispatch(None, None)
-        // .await?;
-        // println!("{:#?}", resp);
+        let resp = GetQRCodeRequest2 {}.dispatch(None, None).await?;
+        println!("### 🌟 请打开网页并扫码: {:#?}", resp.qr_code_url);
+        let auth_code = loop {
+            let resp = GetQRCodeStatusRequest { sid: &resp.sid }
+                .dispatch(None, None)
+                .await?;
+            match resp.status {
+                QRCodeStatus::WaitLogin => println!("### ⏳ 等待扫码登陆..."),
+                QRCodeStatus::ScanSuccess => println!("### 🆗 扫码成功，等待确认..."),
+                QRCodeStatus::LoginSuccess => {
+                    println!("### ✅ 登陆成功");
+                    break resp.auth_code;
+                }
+                QRCodeStatus::QRCodeExpired => {
+                    println!("### ⛔️ 二维码已过期");
+                    break None;
+                }
+            }
+            thread::sleep(time::Duration::from_secs(1))
+        };
+        if auth_code.is_none() {
+            return Ok(());
+        }
+        let resp = GetAccessTokenRequest2 {
+            auth_code: &auth_code.unwrap(),
+        }
+        .dispatch(None, None)
+        .await?;
+        println!("### 👋");
 
-        // println!("########################################");
-        // println!("### 登陆成功：{}", resp.access_token);
-        // println!("########################################");
-
-        // self.dump(&resp)?;
+        self.dump(&resp)?;
         Ok(())
     }
 
-    async fn refresh_token(&self) -> crate::Result<GetAccessTokenResponse> {
-        // let token = Self::load()?;
-        // let resp = GetAccessTokenRequest::new(
-        //     self.client_id,
-        //     self.client_secret,
-        //     None,
-        //     Some(&token.refresh_token),
-        // )
-        // .dispatch(None, None)
-        // .await?;
-        // self.dump(&resp)?;
-        // Ok(resp)
-        todo!()
+    pub async fn refresh_token(&self) -> crate::Result<GetAccessTokenResponse> {
+        let token = Self::load()?;
+        println!("{:#?}", token);
+        let resp = GetAccessTokenRequest3 {
+            refresh_token: &token.refresh_token,
+        }
+        .dispatch(None, None)
+        .await?;
+        self.dump(&resp)?;
+        Ok(resp)
     }
 
     pub async fn refresh_if_needed(&self) -> crate::Result<GetAccessTokenResponse> {

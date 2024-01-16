@@ -2,7 +2,7 @@ use adrive_api::auth2::Auth;
 
 #[tokio::main]
 async fn main() {
-    Auth {}.sign_in().await.unwrap();
+    let resp = Auth {}.refresh_token().await.unwrap();
     // Auth::new().refresh_if_needed().await.unwrap();
     // let resp = ADriveAPI::new().user_info().await.unwrap();
     // println!("{:#?}", resp);
@@ -67,5 +67,5 @@ async fn main() {
     //     )
     //     .await
     //     .unwrap();
-    // println!("{:#?}", resp);
+    println!("{:#?}", resp);
 }
