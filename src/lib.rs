@@ -56,7 +56,24 @@ impl ADriveAPI {
         Ok(space.total_size - space.used_size)
     }
 
-    pub async fn list_dir(&self, drive_id: &str, parent_id: &str) -> Result<Vec<FileItem>> {
-        Ok(self.inner.get_file_list(drive_id, parent_id).await?.items)
+    pub async fn list_dir(&self, _drive_id: &str, _parent_id: &str) -> Result<Vec<FileItem>> {
+        // let mut marker = None;
+        // let result = std::iter::from_fn(async {
+        //     // Replace `||` with `async {`
+        //     let resp = self
+        //         .inner
+        //         .get_file_list(drive_id, parent_id, None)
+        //         .await
+        //         .unwrap();
+        //     if resp.next_marker.is_none() {
+        //         None
+        //     } else {
+        //         marker = resp.next_marker;
+        //         Some(resp.items)
+        //     }
+        // })
+        // .flatten();
+        // Ok(result.collect())
+        todo!()
     }
 }

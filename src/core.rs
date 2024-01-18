@@ -9,7 +9,7 @@ use crate::data::{
     GetFileStarredListRequest, GetFileStarredListResponse, GetSpaceInfoRequest,
     GetSpaceInfoResponse, GetUploadUrlRequest, GetUploadUrlResponse, GetUserInfoRequest,
     GetUserInfoResponse, ListUploadedPartsRequest, MoveFileRequest, MoveFileResponse,
-    MoveFileToRecycleBinRequest, MoveFileToRecycleBinResponse, PartInfo, Request,
+    MoveFileToRecycleBinRequest, MoveFileToRecycleBinResponse, OrderBy, PartInfo, Request, SortBy,
     UpdateFileRequest, UpdateFileResponse,
 };
 
@@ -61,11 +61,20 @@ impl ADriveCoreAPI {
         &self,
         drive_id: &str,
         parent_file_id: &str,
+        marker: Option<&str>,
     ) -> Result<GetFileListResponse> {
         let token = self.auth.refresh_if_needed().await?;
-        let resp = GetFileListRequest::new(drive_id, parent_file_id)
-            .dispatch(None, Some(&token.access_token))
-            .await?;
+        let resp = GetFileListRequest::new(
+            drive_id,
+            parent_file_id,
+            marker,
+            Some(OrderBy::NameEnhanced),
+            Some(SortBy::Asc),
+            None,
+            Some(FileType::All),
+        )
+        .dispatch(None, Some(&token.access_token))
+        .await?;
         Ok(resp)
     }
 

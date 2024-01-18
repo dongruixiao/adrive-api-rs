@@ -16,8 +16,8 @@ pub enum OrderBy {
 #[derive(Serialize, Default, Debug)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum SortBy {
-    #[default]
     Desc,
+    #[default]
     Asc,
 }
 
@@ -57,13 +57,28 @@ pub struct GetFileListRequest<'a> {
 }
 
 impl<'a> GetFileListRequest<'a> {
-    pub fn new(drive_id: &'a str, parent_file_id: &'a str) -> Self {
+    pub fn new(
+        drive_id: &'a str,
+        parent_file_id: &'a str,
+        marker: Option<&'a str>,
+        order_by: Option<OrderBy>,
+        order_direction: Option<SortBy>,
+        category: Option<&'a str>,
+        r#type: Option<FileType>,
+    ) -> Self {
         Self {
             drive_id,
             parent_file_id,
+            marker,
+            order_by,
+            order_direction,
+            category,
+            r#type,
+            limit: Some(100),
             video_thumbnail_time: Some(120000), // ms
             video_thumbnail_width: Some(480),   // px
             image_thumbnail_width: Some(480),   // px
+            fields: Some("*"),
             ..Default::default()
         }
     }
@@ -99,6 +114,7 @@ pub struct FileListingItem {
 #[derive(Debug, Deserialize)]
 pub struct GetFileListResponse {
     pub items: Vec<FileListingItem>,
+    pub next_marker: Option<String>,
 }
 
 #[derive(Debug, Serialize, Default)]

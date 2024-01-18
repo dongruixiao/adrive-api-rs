@@ -71,7 +71,6 @@ impl Auth {
 
     pub async fn refresh_token(&self) -> crate::Result<GetAccessTokenResponse> {
         let token = Self::load()?;
-        println!("{:#?}", token);
         let resp = GetAccessTokenRequest3 {
             refresh_token: token.refresh_token,
         }
