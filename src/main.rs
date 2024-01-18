@@ -1,8 +1,8 @@
-use adrive_api_rs::auth::Auth;
+use adrive_api_rs::ADriveAPI;
 
 #[tokio::main]
 async fn main() {
-    let resp = Auth {}.refresh_token().await.unwrap();
+    // let resp = Auth {}.refresh_token().await.unwrap();
     // Auth::new().refresh_if_needed().await.unwrap();
     // let resp = ADriveAPI::new().user_info().await.unwrap();
     // println!("{:#?}", resp);
@@ -67,5 +67,10 @@ async fn main() {
     //     )
     //     .await
     //     .unwrap();
+    let api = ADriveAPI::new();
+    let drive_id = api.backup_drive_id().await.unwrap();
+    let parent_id = "63c9025cee4e56f1855947ffbc7944a25d5591e8";
+    let resp = api.list_dir(&drive_id, parent_id).await.unwrap();
     println!("{:#?}", resp);
+    println!("{:#?}", resp.len());
 }

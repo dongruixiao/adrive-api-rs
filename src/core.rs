@@ -57,18 +57,6 @@ impl ADriveCoreAPI {
         Ok(resp)
     }
 
-    pub async fn get_default_drive_id(&self) -> Result<String> {
-        Ok(self.drive_info().await?.default_drive_id)
-    }
-
-    pub async fn get_resource_drive_id(&self) -> Result<String> {
-        Ok(self.drive_info().await?.resource_drive_id.unwrap())
-    }
-
-    pub async fn get_backup_drive_id(&self) -> Result<String> {
-        Ok(self.drive_info().await?.backup_drive_id.unwrap())
-    }
-
     pub async fn get_file_list(
         &self,
         drive_id: &str,
