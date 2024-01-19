@@ -7,9 +7,16 @@ pub use data::{
     FileEntry, GetDriveInfoResponse as DriveInfo, GetSpaceInfoResponse as SpaceInfo,
     GetUserInfoResponse as UserInfo, Request,
 };
+use std::path::PathBuf;
 
 pub struct ADriveAPI {
     inner: ADriveCoreAPI,
+}
+
+impl Default for ADriveAPI {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ADriveAPI {
@@ -115,14 +122,14 @@ impl ADriveAPI {
         self.inner.get_file_by_path(drive_id, file_path).await
     }
 
-    pub async fn get_batch_files(
+    pub async fn batch_get_files(
         &self,
         drive_id: &str,
         file_ids: &[&str],
     ) -> Result<Vec<FileEntry>> {
         let mut items = Vec::new();
         for chunk in file_ids.chunks(100) {
-            let resp = self.inner.get_batch_files(drive_id, chunk).await?;
+            let resp = self.inner.batch_get_files(drive_id, chunk).await?;
             items.extend(resp.items);
         }
         Ok(items)
@@ -130,5 +137,38 @@ impl ADriveAPI {
 
     pub async fn get_download_url(&self, drive_id: &str, file_id: &str) -> Result<String> {
         Ok(self.inner.get_download_url(drive_id, file_id).await?.url)
+    }
+
+    pub async fn download_file_directly(
+        &self,
+        drive_id: &str,
+        file_id: &str,
+        target_dir: &str,
+    ) -> Result<PathBuf> {
+        self.inner
+            .download_file_directly(drive_id, file_id, target_dir, None)
+            .await
+    }
+
+    pub async fn download_file_continuously(
+        &self,
+        drive_id: &str,
+        file_id: &str,
+        target_dir: &str,
+    ) -> Result<PathBuf> {
+        self.inner
+            .download_file_continuously(drive_id, file_id, target_dir, None)
+            .await
+    }
+
+    pub async fn download_file_concurrency(
+        &self,
+        drive_id: &str,
+        file_id: &str,
+        target_dir: &str,
+    ) -> Result<PathBuf> {
+        self.inner
+            .download_file_concurrency(drive_id, file_id, target_dir, None)
+            .await
     }
 }

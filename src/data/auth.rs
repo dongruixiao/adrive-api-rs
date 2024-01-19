@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use reqwest::{Method, Url};
 use serde::{Deserialize, Serialize};
 
-const SELF_HOSTED_SERVER: &'static str = "https://adrive-sign-in.onrender.com";
+const SELF_HOSTED_SERVER: &str = "https://adrive-sign-in.onrender.com";
 
 #[derive(Debug, Serialize)]
 pub struct GetQRCodeRequest<'a> {
