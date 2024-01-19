@@ -143,12 +143,19 @@ impl ADriveCoreAPI {
             .await
     }
 
+    fn ensure_dirs(dir: &str) -> Result<PathBuf> {
+        let path = fs::canonicalize(dir)?;
+        fs::create_dir_all(path);
+        Ok(path)
+    }
+
     pub async fn download_file_directly(
         &self,
         drive_id: &str,
         file_id: &str,
-        dst_path: &str,
-    ) -> Result<()> {
+        target_dir: &str,
+        file_name: Option<&str>,
+    ) -> Result<PathBuf> {
         let token = self.auth.refresh_if_needed().await?;
         let url = self.get_download_url(drive_id, file_id).await?.url;
         let bytes = DownloadFileRequest { url: &url }
@@ -156,18 +163,16 @@ impl ADriveCoreAPI {
             .await?
             .bytes()
             .await?;
-        let dst_path = PathBuf::from(dst_path);
-        if dst_path.is_dir() {
-            return Err("dst_path is a directory".into());
-        }
-        if dst_path.parent().is_none() {
-            return Err("dst_path has no parent".into());
+        let dst_path = if let Some(file_name) = file_name {
+            Self::ensure_dirs(target_dir)?.join(file_name)
         } else {
-            fs::create_dir_all(dst_path.parent().unwrap())?;
-        }
+            let name = self.get_file_by_id(drive_id, file_id).await?.name;
+            Self::ensure_dirs(target_dir)?.join(name)
+        };
         let mut file = fs::File::create(dst_path)?;
         let _ = file.write_all(&bytes);
-        Ok(())
+        // Ok(dst_path)
+        todo!()
     }
 
     // pub async fn download_big_file(
