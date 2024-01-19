@@ -4,8 +4,8 @@ pub mod data;
 
 pub use core::{ADriveCoreAPI, Result};
 pub use data::{
-    FileListingItem as FileItem, GetDriveInfoResponse as DriveInfo,
-    GetSpaceInfoResponse as SpaceInfo, GetUserInfoResponse as UserInfo, Request,
+    FileEntry, GetDriveInfoResponse as DriveInfo, GetSpaceInfoResponse as SpaceInfo,
+    GetUserInfoResponse as UserInfo, Request,
 };
 
 pub struct ADriveAPI {
@@ -19,61 +19,116 @@ impl ADriveAPI {
         }
     }
 
-    pub async fn user_info(&self) -> Result<UserInfo> {
-        self.inner.user_info().await
+    pub async fn get_user_info(&self) -> Result<UserInfo> {
+        self.inner.get_user_info().await
     }
 
-    pub async fn drive_info(&self) -> Result<DriveInfo> {
-        self.inner.drive_info().await
+    pub async fn get_drive_info(&self) -> Result<DriveInfo> {
+        self.inner.get_drive_info().await
     }
 
-    pub async fn default_drive_id(&self) -> Result<String> {
-        Ok(self.drive_info().await?.default_drive_id)
+    pub async fn get_default_drive_id(&self) -> Result<String> {
+        Ok(self.get_drive_info().await?.default_drive_id)
     }
 
-    pub async fn resource_drive_id(&self) -> Result<String> {
-        Ok(self.drive_info().await?.resource_drive_id.unwrap())
+    pub async fn get_resource_drive_id(&self) -> Result<String> {
+        Ok(self.get_drive_info().await?.resource_drive_id.unwrap())
     }
 
-    pub async fn backup_drive_id(&self) -> Result<String> {
-        Ok(self.drive_info().await?.backup_drive_id.unwrap())
+    pub async fn get_backup_drive_id(&self) -> Result<String> {
+        Ok(self.get_drive_info().await?.backup_drive_id.unwrap())
     }
 
-    pub async fn space_info(&self) -> Result<SpaceInfo> {
-        self.inner.space_info().await
+    pub async fn get_space_info(&self) -> Result<SpaceInfo> {
+        self.inner.get_space_info().await
     }
 
-    pub async fn used_size(&self) -> Result<u64> {
-        Ok(self.space_info().await?.personal_space_info.used_size)
+    pub async fn get_used_size(&self) -> Result<u64> {
+        Ok(self.get_space_info().await?.personal_space_info.used_size)
     }
 
-    pub async fn total_size(&self) -> Result<u64> {
-        Ok(self.space_info().await?.personal_space_info.total_size)
+    pub async fn get_total_size(&self) -> Result<u64> {
+        Ok(self.get_space_info().await?.personal_space_info.total_size)
     }
 
-    pub async fn available_size(&self) -> Result<u64> {
-        let space = self.space_info().await?.personal_space_info;
+    pub async fn get_available_size(&self) -> Result<u64> {
+        let space = self.get_space_info().await?.personal_space_info;
         Ok(space.total_size - space.used_size)
     }
 
-    pub async fn list_dir(&self, _drive_id: &str, _parent_id: &str) -> Result<Vec<FileItem>> {
-        // let mut marker = None;
-        // let result = std::iter::from_fn(async {
-        //     // Replace `||` with `async {`
-        //     let resp = self
-        //         .inner
-        //         .get_file_list(drive_id, parent_id, None)
-        //         .await
-        //         .unwrap();
-        //     if resp.next_marker.is_none() {
-        //         None
-        //     } else {
-        //         marker = resp.next_marker;
-        //         Some(resp.items)
-        //     }
-        // })
-        // .flatten();
-        // Ok(result.collect())
-        todo!()
+    pub async fn list_files(&self, drive_id: &str, parent_id: &str) -> Result<Vec<FileEntry>> {
+        let mut items = Vec::new();
+        let mut marker = None;
+        loop {
+            let resp = self
+                .inner
+                .list_files(drive_id, parent_id, marker.as_deref())
+                .await?;
+            items.extend(resp.items);
+            marker = resp.next_marker;
+            if marker.is_none() || marker.as_deref() == Some("") {
+                break;
+            }
+        }
+        Ok(items)
+    }
+
+    pub async fn search_files(&self, drive_id: &str, conditions: &str) -> Result<Vec<FileEntry>> {
+        let mut items = Vec::new();
+        let mut marker = None;
+        loop {
+            let resp = self
+                .inner
+                .search_files(drive_id, conditions, marker.as_deref(), Some("name ASC"))
+                .await?;
+            items.extend(resp.items);
+            marker = resp.next_marker;
+            if marker.is_none() || marker.as_deref() == Some("") {
+                break;
+            }
+        }
+        Ok(items)
+    }
+
+    pub async fn list_starred_files(&self, drive_id: &str) -> Result<Vec<FileEntry>> {
+        let mut items = Vec::new();
+        let mut marker = None;
+        loop {
+            let resp = self
+                .inner
+                .list_starred_files(drive_id, marker.as_deref())
+                .await?;
+            items.extend(resp.items);
+            marker = resp.next_marker;
+            if marker.is_none() || marker.as_deref() == Some("") {
+                break;
+            }
+        }
+        Ok(items)
+    }
+
+    pub async fn get_file_by_id(&self, drive_id: &str, file_id: &str) -> Result<FileEntry> {
+        self.inner.get_file_by_id(drive_id, file_id).await
+    }
+
+    pub async fn get_file_by_path(&self, drive_id: &str, file_path: &str) -> Result<FileEntry> {
+        self.inner.get_file_by_path(drive_id, file_path).await
+    }
+
+    pub async fn get_batch_files(
+        &self,
+        drive_id: &str,
+        file_ids: &[&str],
+    ) -> Result<Vec<FileEntry>> {
+        let mut items = Vec::new();
+        for chunk in file_ids.chunks(100) {
+            let resp = self.inner.get_batch_files(drive_id, chunk).await?;
+            items.extend(resp.items);
+        }
+        Ok(items)
+    }
+
+    pub async fn get_download_url(&self, drive_id: &str, file_id: &str) -> Result<String> {
+        Ok(self.inner.get_download_url(drive_id, file_id).await?.url)
     }
 }

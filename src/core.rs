@@ -1,22 +1,20 @@
 use crate::data::{
-    BatchGetFileDetailByIdRequest, BatchGetFileDetailByIdResponse, CompleteUploadRequest,
-    CompleteUploadResponse, CopyFileRequest, CopyFileResponse, DeleteFileRequest,
-    DeleteFileResponse, DownloadFileRequest, FileSearchingRequest, FileSearchingResponse,
-    FlushUploadUrlRequest, FlushUploadUrlResponse, GetAsyncTaskStateRequest,
-    GetAsyncTaskStateResponse, GetDownloadUrlByIdRequest, GetDownloadUrlByIdResponse,
-    GetDriveInfoRequest, GetDriveInfoResponse, GetFileDetailByIdRequest,
-    GetFileDetailByPathRequest, GetFileDetailResponse, GetFileListRequest, GetFileListResponse,
-    GetFileStarredListRequest, GetFileStarredListResponse, GetSpaceInfoRequest,
-    GetSpaceInfoResponse, GetUploadUrlRequest, GetUploadUrlResponse, GetUserInfoRequest,
-    GetUserInfoResponse, ListUploadedPartsRequest, MoveFileRequest, MoveFileResponse,
-    MoveFileToRecycleBinRequest, MoveFileToRecycleBinResponse, OrderBy, PartInfo, Request, SortBy,
-    UpdateFileRequest, UpdateFileResponse,
+    BatchGetFileDetailByIdRequest, CompleteUploadRequest, CompleteUploadResponse, CopyFileRequest,
+    CopyFileResponse, DeleteFileRequest, DeleteFileResponse, DownloadFileRequest, FileEntry,
+    FileSearchingRequest, FileSearchingResponse, FlushUploadUrlRequest, FlushUploadUrlResponse,
+    GetAsyncTaskStateRequest, GetAsyncTaskStateResponse, GetDownloadUrlByIdRequest,
+    GetDownloadUrlByIdResponse, GetDriveInfoRequest, GetDriveInfoResponse,
+    GetFileDetailByIdRequest, GetFileDetailByPathRequest, GetFileListRequest, GetFileListResponse,
+    GetFileStarredListRequest, GetSpaceInfoRequest, GetSpaceInfoResponse, GetUploadUrlRequest,
+    GetUploadUrlResponse, GetUserInfoRequest, GetUserInfoResponse, ListUploadedPartsRequest,
+    MoveFileRequest, MoveFileResponse, MoveFileToRecycleBinRequest, MoveFileToRecycleBinResponse,
+    OrderBy, PartInfo, Request, SortBy, UpdateFileRequest, UpdateFileResponse,
 };
 
 use crate::auth;
 use crate::data::FileType;
 use std::io::{Read, Seek, SeekFrom};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::OnceLock;
 use std::{error, fs, io::Write, path::PathBuf, result};
 
 pub type Result<T> = result::Result<T, Box<dyn error::Error>>;
@@ -33,7 +31,7 @@ impl ADriveCoreAPI {
         }
     }
 
-    pub async fn user_info(&self) -> Result<GetUserInfoResponse> {
+    pub async fn get_user_info(&self) -> Result<GetUserInfoResponse> {
         let token = self.auth.refresh_if_needed().await?;
         let resp = GetUserInfoRequest {}
             .dispatch(None, Some(&token.access_token))
@@ -41,7 +39,7 @@ impl ADriveCoreAPI {
         Ok(resp)
     }
 
-    pub async fn drive_info(&self) -> Result<GetDriveInfoResponse> {
+    pub async fn get_drive_info(&self) -> Result<GetDriveInfoResponse> {
         let token = self.auth.refresh_if_needed().await?;
         let resp = GetDriveInfoRequest {}
             .dispatch(None, Some(&token.access_token))
@@ -49,7 +47,7 @@ impl ADriveCoreAPI {
         Ok(resp)
     }
 
-    pub async fn space_info(&self) -> Result<GetSpaceInfoResponse> {
+    pub async fn get_space_info(&self) -> Result<GetSpaceInfoResponse> {
         let token = self.auth.refresh_if_needed().await?;
         let resp = GetSpaceInfoRequest {}
             .dispatch(None, Some(&token.access_token))
@@ -57,7 +55,7 @@ impl ADriveCoreAPI {
         Ok(resp)
     }
 
-    pub async fn get_file_list(
+    pub async fn list_files(
         &self,
         drive_id: &str,
         parent_file_id: &str,
@@ -71,75 +69,70 @@ impl ADriveCoreAPI {
             Some(OrderBy::NameEnhanced),
             Some(SortBy::Asc),
             None,
-            Some(FileType::All),
+            None,
         )
         .dispatch(None, Some(&token.access_token))
         .await?;
         Ok(resp)
     }
 
-    pub async fn search_for_file(
-        &mut self,
+    pub async fn search_files(
+        &self,
         drive_id: &str,
         query: &str,
+        marker: Option<&str>,
+        order_by: Option<&str>,
     ) -> Result<FileSearchingResponse> {
         let token = self.auth.refresh_if_needed().await?;
-        let resp = FileSearchingRequest::new(drive_id, Some(query))
+        let resp = FileSearchingRequest::new(drive_id, Some(query), marker, order_by)
             .dispatch(None, Some(&token.access_token))
             .await?;
         Ok(resp)
     }
 
-    pub async fn get_starred_file_list(
+    pub async fn list_starred_files(
         &self,
         drive_id: &str,
-    ) -> Result<GetFileStarredListResponse> {
+        marker: Option<&str>,
+    ) -> Result<GetFileListResponse> {
         let token = self.auth.refresh_if_needed().await?;
-        let resp = GetFileStarredListRequest::new(drive_id)
+        let resp = GetFileStarredListRequest::new(drive_id, marker)
             .dispatch(None, Some(&token.access_token))
             .await?;
         Ok(resp)
     }
 
-    pub async fn get_file_detail_by_id(
-        &self,
-        drive_id: &str,
-        file_id: &str,
-    ) -> Result<GetFileDetailResponse> {
+    pub async fn get_file_by_id(&self, drive_id: &str, file_id: &str) -> Result<FileEntry> {
         let token = self.auth.refresh_if_needed().await?;
-        GetFileDetailByIdRequest::new(drive_id, file_id)
+        let resp = GetFileDetailByIdRequest::new(drive_id, file_id)
             .dispatch(None, Some(&token.access_token))
-            .await
+            .await?;
+        Ok(resp)
     }
 
-    pub async fn get_file_detail_by_path(
-        &self,
-        drive_id: &str,
-        path: &str,
-    ) -> Result<GetFileDetailResponse> {
+    pub async fn get_file_by_path(&self, drive_id: &str, file_path: &str) -> Result<FileEntry> {
         let token = self.auth.refresh_if_needed().await?;
-        GetFileDetailByPathRequest::new(drive_id, path)
+        let resp = GetFileDetailByPathRequest::new(drive_id, file_path)
             .dispatch(None, Some(&token.access_token))
-            .await
+            .await?;
+        Ok(resp)
     }
 
-    pub async fn batch_file_detail_by_id(
+    pub async fn get_batch_files(
         &self,
-        drive_ids: &[&str],
+        drive_id: &str,
         file_ids: &[&str],
-    ) -> Result<BatchGetFileDetailByIdResponse> {
-        let token = self.auth.refresh_if_needed().await?;
-        let mut file_list = Vec::new();
-        let zipper = drive_ids.iter().zip(file_ids.iter());
-        for (drive_id, file_id) in zipper {
-            file_list.push(GetFileDetailByIdRequest::new(drive_id, file_id));
+    ) -> Result<GetFileListResponse> {
+        if file_ids.len() > 100 {
+            return Err("the max batch size should not exceed 100".into());
         }
-        BatchGetFileDetailByIdRequest { file_list }
+        let token = self.auth.refresh_if_needed().await?;
+        BatchGetFileDetailByIdRequest::new(drive_id, file_ids)
             .dispatch(None, Some(&token.access_token))
             .await
     }
 
-    pub async fn get_download_url_by_file_id(
+    pub async fn get_download_url(
         &self,
         drive_id: &str,
         file_id: &str,
@@ -150,17 +143,14 @@ impl ADriveCoreAPI {
             .await
     }
 
-    pub async fn download_small_file(
+    pub async fn download_file_directly(
         &self,
         drive_id: &str,
         file_id: &str,
         dst_path: &str,
     ) -> Result<()> {
-        let token = &self.auth.refresh_if_needed().await?;
-        let url = self
-            .get_download_url_by_file_id(drive_id, file_id)
-            .await?
-            .url;
+        let token = self.auth.refresh_if_needed().await?;
+        let url = self.get_download_url(drive_id, file_id).await?.url;
         let bytes = DownloadFileRequest { url: &url }
             .get_original(None, Some(&token.access_token))
             .await?
@@ -180,67 +170,67 @@ impl ADriveCoreAPI {
         Ok(())
     }
 
-    pub async fn download_big_file(
-        &self,
-        drive_id: &str,
-        file_id: &str,
-        dst_path: &str,
-    ) -> Result<()> {
-        let token = self.auth.refresh_if_needed().await?;
-        let url = self
-            .get_download_url_by_file_id(drive_id, file_id)
-            .await?
-            .url;
-        let _stream = DownloadFileRequest { url: &url }
-            .get_original(None, Some(&token.access_token))
-            .await?
-            .bytes_stream();
-        let dst_path = PathBuf::from(dst_path);
-        if dst_path.is_dir() {
-            return Err("dst_path is a directory".into());
-        }
-        if dst_path.parent().is_none() {
-            return Err("dst_path has no parent".into());
-        } else {
-            fs::create_dir_all(dst_path.parent().unwrap())?;
-        }
-        let file = Arc::new(Mutex::new(fs::File::create(dst_path)?));
-        let detail = GetFileDetailByIdRequest::new(drive_id, file_id)
-            .dispatch(None, Some(&token.access_token))
-            .await?;
-        let mut from = 0;
-        let offset = 10 * 1024 * 1024 - 1; // 10MB
-        let mut tasks = Vec::new();
-        loop {
-            let to = from + offset;
-            let url = url.clone();
-            let token = token.access_token.clone();
-            let file_clone = Arc::clone(&file);
-            if from <= detail.size {
-                let to = if to > detail.size { detail.size } else { to };
-                let task = Self::runtime().spawn(async move {
-                    let _ = Self::write_chunk(
-                        &url,
-                        &token,
-                        file_clone,
-                        Some(&from.to_string()),
-                        Some(&to.to_string()),
-                        detail.size,
-                    )
-                    .await;
-                });
-                tasks.push(task);
-                from = to + 1;
-            } else {
-                break;
-            }
-        }
-        for task in tasks {
-            task.await?;
-        }
+    // pub async fn download_big_file(
+    //     &self,
+    //     drive_id: &str,
+    //     file_id: &str,
+    //     dst_path: &str,
+    // ) -> Result<()> {
+    //     let token = self.auth.refresh_if_needed().await?;
+    //     let url = self
+    //         .get_download_url_by_file_id(drive_id, file_id)
+    //         .await?
+    //         .url;
+    //     let _stream = DownloadFileRequest { url: &url }
+    //         .get_original(None, Some(&token.access_token))
+    //         .await?
+    //         .bytes_stream();
+    //     let dst_path = PathBuf::from(dst_path);
+    //     if dst_path.is_dir() {
+    //         return Err("dst_path is a directory".into());
+    //     }
+    //     if dst_path.parent().is_none() {
+    //         return Err("dst_path has no parent".into());
+    //     } else {
+    //         fs::create_dir_all(dst_path.parent().unwrap())?;
+    //     }
+    //     let file = Arc::new(Mutex::new(fs::File::create(dst_path)?));
+    //     let detail = GetFileDetailByIdRequest::new(drive_id, file_id)
+    //         .dispatch(None, Some(&token.access_token))
+    //         .await?;
+    //     let mut from = 0;
+    //     let offset = 10 * 1024 * 1024 - 1; // 10MB
+    //     let mut tasks = Vec::new();
+    //     loop {
+    //         let to = from + offset;
+    //         let url = url.clone();
+    //         let token = token.access_token.clone();
+    //         let file_clone = Arc::clone(&file);
+    //         if from <= detail.size {
+    //             let to = if to > detail.size { detail.size } else { to };
+    //             let task = Self::runtime().spawn(async move {
+    //                 let _ = Self::write_chunk(
+    //                     &url,
+    //                     &token,
+    //                     file_clone,
+    //                     Some(&from.to_string()),
+    //                     Some(&to.to_string()),
+    //                     detail.size,
+    //                 )
+    //                 .await;
+    //             });
+    //             tasks.push(task);
+    //             from = to + 1;
+    //         } else {
+    //             break;
+    //         }
+    //     }
+    //     for task in tasks {
+    //         task.await?;
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     fn runtime() -> &'static tokio::runtime::Runtime {
         TOKIO_RUNTIME.get_or_init(|| {
@@ -252,42 +242,42 @@ impl ADriveCoreAPI {
         })
     }
 
-    async fn write_chunk(
-        url: &str,
-        token: &str,
-        file: Arc<Mutex<fs::File>>,
-        from: Option<&str>,
-        to: Option<&str>,
-        size: u64,
-    ) -> Result<usize> {
-        let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert(
-            "Range",
-            format!(
-                "bytes={}-{}",
-                from.unwrap(),
-                to.and_then(|v| {
-                    if v.parse::<u64>().unwrap() == size {
-                        Some("")
-                    } else {
-                        to
-                    }
-                })
-                .unwrap()
-            )
-            .parse()?,
-        );
-        let bytes = DownloadFileRequest { url: &url }
-            .get_original(Some(headers), Some(&token))
-            .await
-            .unwrap()
-            .bytes()
-            .await?;
-        let mut file_guard = file.lock().unwrap();
-        file_guard.seek(SeekFrom::Start(from.unwrap().parse::<u64>()?))?;
-        let count = file_guard.write(&bytes)?;
-        Ok(count)
-    }
+    // async fn write_chunk(
+    //     url: &str,
+    //     token: &str,
+    //     file: Arc<Mutex<fs::File>>,
+    //     from: Option<&str>,
+    //     to: Option<&str>,
+    //     size: u64,
+    // ) -> Result<usize> {
+    //     let mut headers = reqwest::header::HeaderMap::new();
+    //     headers.insert(
+    //         "Range",
+    //         format!(
+    //             "bytes={}-{}",
+    //             from.unwrap(),
+    //             to.and_then(|v| {
+    //                 if v.parse::<u64>().unwrap() == size {
+    //                     Some("")
+    //                 } else {
+    //                     to
+    //                 }
+    //             })
+    //             .unwrap()
+    //         )
+    //         .parse()?,
+    //     );
+    //     let bytes = DownloadFileRequest { url: &url }
+    //         .get_original(Some(headers), Some(&token))
+    //         .await
+    //         .unwrap()
+    //         .bytes()
+    //         .await?;
+    //     let mut file_guard = file.lock().unwrap();
+    //     file_guard.seek(SeekFrom::Start(from.unwrap().parse::<u64>()?))?;
+    //     let count = file_guard.write(&bytes)?;
+    //     Ok(count)
+    // }
 
     // 只能创建单层文件夹
     pub async fn create_dir(

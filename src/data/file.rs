@@ -74,11 +74,6 @@ impl<'a> GetFileListRequest<'a> {
             order_direction,
             category,
             r#type,
-            limit: Some(100),
-            video_thumbnail_time: Some(120000), // ms
-            video_thumbnail_width: Some(480),   // px
-            image_thumbnail_width: Some(480),   // px
-            fields: Some("*"),
             ..Default::default()
         }
     }
@@ -89,9 +84,18 @@ impl Request for GetFileListRequest<'_> {
     const METHOD: reqwest::Method = Method::POST;
     type Response = GetFileListResponse;
 }
+#[derive(Debug, Deserialize)]
+pub struct VideoMediaMetadata {
+    pub width: u32,
+    pub height: u32,
+    pub duration: Option<String>,
+    pub video_media_video_stream: Vec<serde_json::Value>,
+    pub video_media_audio_stream: Vec<serde_json::Value>,
+    pub time: Option<String>,
+}
 
 #[derive(Debug, Deserialize)]
-pub struct FileListingItem {
+pub struct FileEntry {
     pub drive_id: String,
     pub file_id: String,
     pub parent_file_id: String,
@@ -106,14 +110,13 @@ pub struct FileListingItem {
     pub created_at: String,
     pub updated_at: String,
     pub play_cursor: Option<String>,
-    pub video_media_metadata: Option<serde_json::Value>, // TODO
+    pub video_media_metadata: Option<VideoMediaMetadata>,
     pub video_preview_metadata: Option<String>,
-    pub next_marker: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct GetFileListResponse {
-    pub items: Vec<FileListingItem>,
+    pub items: Vec<FileEntry>,
     pub next_marker: Option<String>,
 }
 
@@ -140,7 +143,7 @@ pub struct FileSearchingRequest<'a> {
     name ASC | DESC
     size ASC | DESC
     */
-    order_by: Option<OrderBy>,
+    order_by: Option<&'a str>,
     video_thumbnail_time: Option<u32>,
     video_thumbnail_width: Option<u32>,
     image_thumbnail_width: Option<u32>,
@@ -148,13 +151,18 @@ pub struct FileSearchingRequest<'a> {
 }
 
 impl<'a> FileSearchingRequest<'a> {
-    pub fn new(drive_id: &'a str, query: Option<&'a str>) -> Self {
+    pub fn new(
+        drive_id: &'a str,
+        query: Option<&'a str>,
+        marker: Option<&'a str>,
+        order_by: Option<&'a str>,
+    ) -> Self {
         Self {
             drive_id,
             query,
-            video_thumbnail_time: Some(120000), // ms
-            video_thumbnail_width: Some(480),   // px
-            image_thumbnail_width: Some(480),   // px
+            marker,
+            order_by,
+            return_total_count: Some(true),
             ..Default::default()
         }
     }
@@ -167,27 +175,10 @@ impl Request for FileSearchingRequest<'_> {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct FileSearchingItem {
-    pub drive_id: String,
-    pub file_id: String,
-    pub parent_file_id: String,
-    pub name: String,
-    pub size: Option<u64>,              // TODO folder don't have size
-    pub file_extension: Option<String>, // TODO folder don't have file_extension
-    pub content_hash: Option<String>,   // TODO folder don't have content_hash
-    pub category: Option<String>,       // TODO folder don't have category
-    pub r#type: FileType,
-    pub thumbnail: Option<String>,
-    pub url: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+pub struct FileSearchingResponse {
+    pub items: Vec<FileEntry>,
     pub next_marker: Option<String>,
     pub total_count: Option<u32>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct FileSearchingResponse {
-    pub items: Vec<FileSearchingItem>,
 }
 
 #[derive(Debug, Serialize, Default)]
@@ -204,12 +195,12 @@ pub struct GetFileStarredListRequest<'a> {
 }
 
 impl<'a> GetFileStarredListRequest<'a> {
-    pub fn new(drive_id: &'a str) -> Self {
+    pub fn new(drive_id: &'a str, marker: Option<&'a str>) -> Self {
         Self {
             drive_id,
-            video_thumbnail_time: Some(120000), // ms
-            video_thumbnail_width: Some(480),   // px
-            image_thumbnail_width: Some(480),   // px
+            marker,
+            order_by: Some(OrderBy::NameEnhanced),
+            order_direction: Some(SortBy::Asc),
             ..Default::default()
         }
     }
@@ -218,30 +209,7 @@ impl<'a> GetFileStarredListRequest<'a> {
 impl Request for GetFileStarredListRequest<'_> {
     const URI: &'static str = "/adrive/v1.0/openFile/starredList";
     const METHOD: reqwest::Method = Method::POST;
-    type Response = GetFileStarredListResponse;
-}
-
-#[derive(Debug, Deserialize)]
-pub struct FileStarredItem {
-    pub drive_id: String,
-    pub file_id: String,
-    pub parent_file_id: String,
-    pub name: String,
-    pub size: Option<u64>,              // TODO folder don't have size
-    pub file_extension: Option<String>, // TODO folder don't have file_extension
-    pub content_hash: Option<String>,   // TODO folder don't have content_hash
-    pub category: Option<String>,       // TODO folder don't have category
-    pub r#type: FileType,
-    pub thumbnail: Option<String>,
-    pub url: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
-    pub next_marker: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct GetFileStarredListResponse {
-    pub items: Vec<FileStarredItem>,
+    type Response = GetFileListResponse;
 }
 
 #[derive(Debug, Serialize, Default)]
@@ -259,9 +227,6 @@ impl<'a> GetFileDetailByIdRequest<'a> {
         Self {
             drive_id,
             file_id,
-            video_thumbnail_time: Some(120000), // ms
-            video_thumbnail_width: Some(480),   // px
-            image_thumbnail_width: Some(480),   // px
             ..Default::default()
         }
     }
@@ -270,25 +235,7 @@ impl<'a> GetFileDetailByIdRequest<'a> {
 impl Request for GetFileDetailByIdRequest<'_> {
     const URI: &'static str = "/adrive/v1.0/openFile/get";
     const METHOD: reqwest::Method = Method::POST;
-    type Response = GetFileDetailResponse;
-}
-
-#[derive(Debug, Deserialize)]
-pub struct GetFileDetailResponse {
-    pub drive_id: String,
-    pub file_id: String,
-    pub parent_file_id: String,
-    pub name: String,
-    pub size: u64,
-    pub file_extension: String,
-    pub content_hash: String,
-    pub category: String,
-    pub r#type: FileType,
-    pub thumbnail: String,
-    pub url: String,
-    pub created_at: String,
-    pub updated_at: String,
-    pub video_media_metadata: serde_json::Value,
+    type Response = FileEntry;
 }
 
 #[derive(Debug, Serialize, Default)]
@@ -309,30 +256,45 @@ impl<'a> GetFileDetailByPathRequest<'a> {
 impl Request for GetFileDetailByPathRequest<'_> {
     const URI: &'static str = "/adrive/v1.0/openFile/get_by_path";
     const METHOD: reqwest::Method = Method::POST;
-    type Response = GetFileDetailResponse;
+    type Response = FileEntry;
 }
 
 #[derive(Debug, Serialize, Default)]
 pub struct BatchGetFileDetailByIdRequest<'a> {
     pub file_list: Vec<GetFileDetailByIdRequest<'a>>,
+    pub video_thumbnail_time: Option<u32>,
+    pub video_thumbnail_width: Option<u32>,
+    pub image_thumbnail_width: Option<u32>,
 }
 
+impl<'a> BatchGetFileDetailByIdRequest<'a> {
+    pub fn new(drive_id: &'a str, file_ids: &[&'a str]) -> Self {
+        let file_list = file_ids
+            .iter()
+            .map(|file_id| GetFileDetailByIdRequest::new(drive_id, file_id))
+            .collect();
+        Self {
+            file_list,
+            ..Default::default()
+        }
+    }
+}
 impl Request for BatchGetFileDetailByIdRequest<'_> {
     const URI: &'static str = "/adrive/v1.0/openFile/batch/get";
     const METHOD: reqwest::Method = Method::POST;
-    type Response = BatchGetFileDetailByIdResponse;
+    type Response = GetFileListResponse;
 }
 
 #[derive(Debug, Deserialize)]
 pub struct BatchGetFileDetailByIdResponse {
-    pub items: Vec<GetFileDetailResponse>,
+    pub items: Vec<FileEntry>,
 }
 
 #[derive(Debug, Serialize, Default)]
 pub struct GetDownloadUrlByIdRequest<'a> {
     drive_id: &'a str,
     file_id: &'a str,
-    expire_sec: Option<u32>,
+    expire_sec: Option<u32>, // default 900s
 }
 
 impl<'a> GetDownloadUrlByIdRequest<'a> {

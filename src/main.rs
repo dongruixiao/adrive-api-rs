@@ -68,9 +68,16 @@ async fn main() {
     //     .await
     //     .unwrap();
     let api = ADriveAPI::new();
-    let drive_id = api.backup_drive_id().await.unwrap();
+    let drive_id = api.get_backup_drive_id().await.unwrap();
+    println!("{}", drive_id);
     let parent_id = "63c9025cee4e56f1855947ffbc7944a25d5591e8";
-    let resp = api.list_dir(&drive_id, parent_id).await.unwrap();
-    println!("{:#?}", resp);
-    println!("{:#?}", resp.len());
+    let resp = api.list_files(&drive_id, parent_id).await.unwrap();
+
+    let items = resp
+        .iter()
+        .map(|item| item.file_id.as_str())
+        .collect::<Vec<_>>();
+    println!("{}", items.len());
+    let resp = api.get_batch_files(&drive_id, &items).await.unwrap();
+    println!("{}", resp.len());
 }
