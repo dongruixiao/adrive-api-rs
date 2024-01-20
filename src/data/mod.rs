@@ -32,7 +32,7 @@ pub trait Request: Sized + Serialize {
         match Self::METHOD {
             Method::GET => self.get(headers, token).await,
             Method::POST => self.post(headers, token).await,
-            _ => Err(format!("NotImplMethod: {}", Self::METHOD).into()),
+            _ => unimplemented!(),
         }
     }
 
@@ -76,6 +76,23 @@ pub trait Request: Sized + Serialize {
         let path = self.path_join()?;
         let resp = Self::reqwest_client()
             .get(path)
+            .bearer_auth(token.unwrap_or_default())
+            .headers(headers.unwrap_or_default())
+            .send()
+            .await?;
+        Ok(resp)
+    }
+
+    async fn put_original(
+        &self,
+        headers: Option<HeaderMap>,
+        token: Option<&str>,
+        data: Vec<u8>,
+    ) -> Result<reqwest::Response> {
+        let path = self.path_join()?;
+        let resp = Self::reqwest_client()
+            .put(path)
+            .body(data)
             .bearer_auth(token.unwrap_or_default())
             .headers(headers.unwrap_or_default())
             .send()

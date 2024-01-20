@@ -107,6 +107,7 @@ pub struct FileEntry {
     pub r#type: FileType,
     pub thumbnail: Option<String>,
     pub url: Option<String>,
+    pub download_url: Option<String>, // TODO complete file needed
     pub created_at: String,
     pub updated_at: String,
     pub play_cursor: Option<String>,
@@ -350,7 +351,7 @@ impl Request for PartInfo {
     const METHOD: reqwest::Method = Method::PUT;
     type Response = ();
 
-    fn path_join(&self) -> crate::Result<url::Url> {
+    fn path_join(&self) -> crate::Result<reqwest::Url> {
         Ok(reqwest::Url::parse(self.upload_url.as_ref().unwrap())?)
     }
 }
@@ -368,7 +369,7 @@ pub struct StreamsInfo {
 }
 
 #[derive(Debug, Serialize, Default)]
-pub struct GetUploadUrlRequest<'a> {
+pub struct CreateFileRequest<'a> {
     pub drive_id: &'a str,
     pub parent_file_id: &'a str,
     pub name: &'a str,
@@ -380,12 +381,13 @@ pub struct GetUploadUrlRequest<'a> {
     pub content_hash: Option<&'a str>,
     pub content_hash_name: Option<&'a str>,
     pub proof_code: Option<&'a str>,
+    pub proof_version: Option<&'a str>,
     pub local_created_at: Option<&'a str>,
     pub local_modified_at: Option<&'a str>,
     pub part_info_list: Option<Vec<PartInfo>>,
 }
 
-impl<'a> GetUploadUrlRequest<'a> {
+impl<'a> CreateFileRequest<'a> {
     pub fn new(
         drive_id: &'a str,
         parent_file_id: &'a str,
@@ -404,14 +406,14 @@ impl<'a> GetUploadUrlRequest<'a> {
     }
 }
 
-impl Request for GetUploadUrlRequest<'_> {
+impl Request for CreateFileRequest<'_> {
     const URI: &'static str = "/adrive/v1.0/openFile/create";
     const METHOD: reqwest::Method = Method::POST;
-    type Response = GetUploadUrlResponse;
+    type Response = CreateFileResponse;
 }
 
 #[derive(Debug, Deserialize)]
-pub struct GetUploadUrlResponse {
+pub struct CreateFileResponse {
     pub drive_id: String,
     pub file_id: String,
     pub status: Option<String>,
@@ -474,16 +476,21 @@ pub struct ListUploadedPartsRequest<'a> {
     pub drive_id: &'a str,
     pub file_id: &'a str,
     pub upload_id: &'a str,
-    pub part_number_marker: Option<u16>,
+    pub part_number_marker: Option<String>,
 }
 
 impl<'a> ListUploadedPartsRequest<'a> {
-    pub fn new(drive_id: &'a str, file_id: &'a str, upload_id: &'a str) -> Self {
+    pub fn new(
+        drive_id: &'a str,
+        file_id: &'a str,
+        upload_id: &'a str,
+        part_number_marker: Option<String>,
+    ) -> Self {
         Self {
             drive_id,
             file_id,
             upload_id,
-            ..Default::default()
+            part_number_marker,
         }
     }
 }
@@ -491,7 +498,7 @@ impl<'a> ListUploadedPartsRequest<'a> {
 impl Request for ListUploadedPartsRequest<'_> {
     const URI: &'static str = "/adrive/v1.0/openFile/listUploadedParts";
     const METHOD: reqwest::Method = Method::POST;
-    type Response = serde_json::Value;
+    type Response = ListUploadedPartsResponse;
 }
 
 #[derive(Debug, Deserialize)]
@@ -531,24 +538,7 @@ impl<'a> CompleteUploadRequest<'a> {
 impl Request for CompleteUploadRequest<'_> {
     const URI: &'static str = "/adrive/v1.0/openFile/complete";
     const METHOD: reqwest::Method = Method::POST;
-    type Response = CompleteUploadResponse;
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CompleteUploadResponse {
-    pub drive_id: String,
-    pub file_id: String,
-    pub name: String,
-    pub size: u64,
-    pub file_extension: String,
-    pub content_hash: String,
-    pub category: String,
-    pub r#type: FileType,
-    pub thumbnail: Option<String>,
-    pub url: Option<String>,
-    pub download_url: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    type Response = FileEntry;
 }
 
 #[derive(Debug, Serialize, Default)]
@@ -581,21 +571,7 @@ impl<'a> UpdateFileRequest<'a> {
 impl Request for UpdateFileRequest<'_> {
     const URI: &'static str = "/adrive/v1.0/openFile/update";
     const METHOD: reqwest::Method = Method::POST;
-    type Response = UpdateFileResponse;
-}
-
-#[derive(Debug, Deserialize)]
-pub struct UpdateFileResponse {
-    pub drive_id: String,
-    pub file_id: String,
-    pub name: String,
-    pub size: u64,
-    pub file_extension: String,
-    pub content_hash: String,
-    pub category: String,
-    pub r#type: FileType,
-    pub created_at: String,
-    pub updated_at: String,
+    type Response = FileEntry;
 }
 
 #[derive(Debug, Serialize, Default)]
@@ -608,12 +584,18 @@ pub struct MoveFileRequest<'a> {
 }
 
 impl<'a> MoveFileRequest<'a> {
-    pub fn new(drive_id: &'a str, file_id: &'a str, to_parent_file_id: &'a str) -> Self {
+    pub fn new(
+        drive_id: &'a str,
+        file_id: &'a str,
+        to_parent_file_id: &'a str,
+        rename: Option<&'a str>,
+    ) -> Self {
         Self {
             drive_id,
             file_id,
             to_parent_file_id,
             check_name_mode: Some(IfNameExists::AutoRename),
+            new_name: rename,
             ..Default::default()
         }
     }
@@ -622,11 +604,11 @@ impl<'a> MoveFileRequest<'a> {
 impl Request for MoveFileRequest<'_> {
     const URI: &'static str = "/adrive/v1.0/openFile/move";
     const METHOD: reqwest::Method = Method::POST;
-    type Response = MoveFileResponse;
+    type Response = AsyncTaskResponse;
 }
 
 #[derive(Debug, Deserialize)]
-pub struct MoveFileResponse {
+pub struct AsyncTaskResponse {
     pub drive_id: String,
     pub file_id: String,
     pub async_task_id: Option<String>,
@@ -657,39 +639,25 @@ impl<'a> CopyFileRequest<'a> {
 impl Request for CopyFileRequest<'_> {
     const URI: &'static str = "/adrive/v1.0/openFile/copy";
     const METHOD: reqwest::Method = Method::POST;
-    type Response = CopyFileResponse;
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CopyFileResponse {
-    pub drive_id: String,
-    pub file_id: String,
-    pub async_task_id: Option<String>,
+    type Response = AsyncTaskResponse;
 }
 
 #[derive(Debug, Serialize, Default)]
-pub struct MoveFileToRecycleBinRequest<'a> {
+pub struct RecyleFileRequest<'a> {
     pub drive_id: &'a str,
     pub file_id: &'a str,
 }
 
-impl<'a> MoveFileToRecycleBinRequest<'a> {
+impl<'a> RecyleFileRequest<'a> {
     pub fn new(drive_id: &'a str, file_id: &'a str) -> Self {
         Self { drive_id, file_id }
     }
 }
 
-impl Request for MoveFileToRecycleBinRequest<'_> {
+impl Request for RecyleFileRequest<'_> {
     const URI: &'static str = "/adrive/v1.0/openFile/recyclebin/trash";
     const METHOD: reqwest::Method = Method::POST;
-    type Response = MoveFileToRecycleBinResponse;
-}
-
-#[derive(Debug, Deserialize)]
-pub struct MoveFileToRecycleBinResponse {
-    pub drive_id: String,
-    pub file_id: String,
-    pub async_task_id: Option<String>,
+    type Response = AsyncTaskResponse;
 }
 
 #[derive(Debug, Serialize, Default)]
@@ -701,14 +669,7 @@ pub struct DeleteFileRequest<'a> {
 impl Request for DeleteFileRequest<'_> {
     const URI: &'static str = "/adrive/v1.0/openFile/delete";
     const METHOD: reqwest::Method = Method::POST;
-    type Response = DeleteFileResponse;
-}
-
-#[derive(Debug, Deserialize)]
-pub struct DeleteFileResponse {
-    pub drive_id: Option<String>,
-    pub file_id: String,
-    pub async_task_id: Option<String>,
+    type Response = AsyncTaskResponse;
 }
 
 #[derive(Debug, Serialize, Default)]

@@ -1,4 +1,4 @@
-use adrive_api_rs::ADriveAPI;
+use adrive_api_rs::{ADriveAPI, ADriveCoreAPI};
 
 #[tokio::main]
 async fn main() {
@@ -68,7 +68,7 @@ async fn main() {
     //     .await
     //     .unwrap();
     let api = ADriveAPI::new();
-    let drive_id = api.get_backup_drive_id().await.unwrap();
+    let _drive_id = api.get_backup_drive_id().await.unwrap();
     // println!("{}", drive_id);
     // let parent_id = "63c9025cee4e56f1855947ffbc7944a25d5591e8";
     // let resp = api.list_files(&drive_id, parent_id).await.unwrap();
@@ -79,13 +79,16 @@ async fn main() {
     //     .collect::<Vec<_>>();
     // println!("{}", items.len());
     // let resp = api.batch_get_files(&drive_id, &items).await.unwrap();
-    let resp = api
-        .download_file_concurrency(
-            &drive_id,
-            "64c1130b27cf0ebef36a48dc940f2c353cbbc86b",
-            "../test/a/b/video.mp4",
-        )
-        .await
-        .unwrap();
+    // let resp = api
+    //     .download_file_continuously(
+    //         &drive_id,
+    //         "64c1130b27cf0ebef36a48dc940f2c353cbbc86b",
+    //         "./test/a/b",
+    //     )
+    //     .await
+    //     .unwrap();
+    let api = ADriveCoreAPI::new();
+    let drive_id = api.get_drive_info().await.unwrap().backup_drive_id.unwrap();
+    let resp = api.create_folder(&drive_id, "root", "a").await.unwrap();
     println!("{:#?}", resp);
 }
