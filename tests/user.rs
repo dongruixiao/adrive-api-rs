@@ -1,7 +1,6 @@
 mod common;
 use adrive_api_rs::{ADriveAPI, Result};
 
-
 #[tokio::test]
 #[ignore]
 async fn test_user() -> Result<()> {
