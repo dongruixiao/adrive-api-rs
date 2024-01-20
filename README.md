@@ -12,7 +12,7 @@ git clone git@github.com:dongruixiao/adrive-api-rs.git
 
 cd adrive-api-rs
 
-cargo build --debug
+cargo build
 
 ```
 
