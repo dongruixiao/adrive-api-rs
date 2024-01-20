@@ -292,8 +292,8 @@ impl ADriveAPI {
         Ok(resp.file_id)
     }
 
-    pub async fn recyle_file(&self, drive_id: &str, file_id: &str) -> Result<()> {
-        self.inner.recyle_file(drive_id, file_id).await?;
+    pub async fn recycle_file(&self, drive_id: &str, file_id: &str) -> Result<()> {
+        self.inner.recycle_file(drive_id, file_id).await?;
         Ok(())
     }
 

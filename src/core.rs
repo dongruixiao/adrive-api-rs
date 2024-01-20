@@ -9,7 +9,7 @@ use crate::data::{
     GetFileDetailByIdRequest, GetFileDetailByPathRequest, GetFileListRequest, GetFileListResponse,
     GetFileStarredListRequest, GetSpaceInfoRequest, GetSpaceInfoResponse, GetUserInfoRequest,
     GetUserInfoResponse, IfNameExists, ListUploadedPartsRequest, ListUploadedPartsResponse,
-    MoveFileRequest, OrderBy, PartInfo, RecyleFileRequest, Request, SortBy, UpdateFileRequest,
+    MoveFileRequest, OrderBy, PartInfo, RecycleFileRequest, Request, SortBy, UpdateFileRequest,
 };
 
 use crate::auth;
@@ -422,9 +422,9 @@ impl ADriveCoreAPI {
             .await
     }
 
-    pub async fn recyle_file(&self, drive_id: &str, file_id: &str) -> Result<AsyncTaskResponse> {
+    pub async fn recycle_file(&self, drive_id: &str, file_id: &str) -> Result<AsyncTaskResponse> {
         let token = &self.auth.refresh_if_needed().await?;
-        RecyleFileRequest::new(drive_id, file_id)
+        RecycleFileRequest::new(drive_id, file_id)
             .dispatch(None, Some(&token.access_token))
             .await
     }

@@ -99,7 +99,7 @@ async fn test_file() -> Result<()> {
     println!("{:#?}", resp);
 
     let file_id = "65a3fd0ebed88b3dd64a4073be604310a2d946c7";
-    adrive_api.recyle_file(&drive_id, file_id).await?;
+    adrive_api.recycle_file(&drive_id, file_id).await?;
     println!("{:#?}", resp);
     Ok(())
 }

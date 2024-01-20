@@ -642,18 +642,18 @@ impl Request for CopyFileRequest<'_> {
 }
 
 #[derive(Debug, Serialize, Default)]
-pub struct RecyleFileRequest<'a> {
+pub struct RecycleFileRequest<'a> {
     pub drive_id: &'a str,
     pub file_id: &'a str,
 }
 
-impl<'a> RecyleFileRequest<'a> {
+impl<'a> RecycleFileRequest<'a> {
     pub fn new(drive_id: &'a str, file_id: &'a str) -> Self {
         Self { drive_id, file_id }
     }
 }
 
-impl Request for RecyleFileRequest<'_> {
+impl Request for RecycleFileRequest<'_> {
     const URI: &'static str = "/adrive/v1.0/openFile/recyclebin/trash";
     const METHOD: reqwest::Method = Method::POST;
     type Response = AsyncTaskResponse;
