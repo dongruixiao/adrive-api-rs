@@ -596,7 +596,6 @@ impl<'a> MoveFileRequest<'a> {
             to_parent_file_id,
             check_name_mode: Some(IfNameExists::AutoRename),
             new_name: rename,
-            ..Default::default()
         }
     }
 }

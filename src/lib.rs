@@ -212,8 +212,8 @@ impl ADriveAPI {
             let mut file = fs::File::open(&file_path)?;
             let mut buffer = Vec::new();
             let pos = (part_info.part_number as u64 - 1) * ADriveCoreAPI::PART_SIZE;
-            file.seek(SeekFrom::Start(pos));
-            file.take(ADriveCoreAPI::PART_SIZE).read_to_end(&mut buffer);
+            let _ = file.seek(SeekFrom::Start(pos));
+            let _ = file.take(ADriveCoreAPI::PART_SIZE).read_to_end(&mut buffer);
             self.inner.upload_part(part_info, buffer).await?;
         }
 
@@ -284,11 +284,12 @@ impl ADriveAPI {
         drive_id: &str,
         file_id: &str,
         target_parent_id: &str,
-    ) -> Result<()> {
-        self.inner
+    ) -> Result<String> {
+        let resp = self
+            .inner
             .copy_file(drive_id, file_id, target_parent_id)
             .await?;
-        Ok(())
+        Ok(resp.file_id)
     }
 
     pub async fn recyle_file(&self, drive_id: &str, file_id: &str) -> Result<()> {
