@@ -394,6 +394,12 @@ impl<'a> CreateFileRequest<'a> {
         name: &'a str,
         r#type: FileType,
         part_info_list: Option<Vec<PartInfo>>,
+        pre_hash: Option<&'a str>,          // content_hash needed
+        size: Option<u64>,                  // content_hash needed
+        proof_code: Option<&'a str>,        // content_hash needed
+        proof_version: Option<&'a str>,     // content_hash needed, default v1
+        content_hash: Option<&'a str>,      // content_hash needed
+        content_hash_name: Option<&'a str>, // content_hash needed, default sha1
     ) -> Self {
         Self {
             drive_id,
@@ -401,6 +407,12 @@ impl<'a> CreateFileRequest<'a> {
             name,
             r#type,
             part_info_list,
+            pre_hash,
+            size,
+            proof_code,
+            proof_version,
+            content_hash,
+            content_hash_name,
             ..Default::default()
         }
     }
@@ -413,17 +425,26 @@ impl Request for CreateFileRequest<'_> {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct CreateFileResponse {
-    pub drive_id: String,
-    pub file_id: String,
-    pub status: Option<String>,
-    pub parent_file_id: String,
-    pub upload_id: Option<String>,
-    pub file_name: String,
-    pub available: Option<bool>,
-    pub exist: Option<bool>,
-    pub rapid_upload: Option<bool>,
-    pub part_info_list: Option<Vec<PartInfo>>,
+pub enum CreateFileResponse {
+    CreateFileRecord {
+        drive_id: String,
+        file_id: String,
+        status: Option<String>,
+        parent_file_id: String,
+        upload_id: Option<String>,
+        file_name: String,
+        available: Option<bool>,
+        exist: Option<bool>,
+        rapid_upload: Option<bool>,
+        part_info_list: Option<Vec<PartInfo>>,
+    },
+    MatchPreHash {
+        parent_file_id: String,
+        file_name: String,
+        pre_hash: String,
+        code: String,
+        message: String,
+    },
 }
 
 #[derive(Debug, Serialize, Default)]

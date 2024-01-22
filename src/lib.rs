@@ -183,11 +183,11 @@ impl ADriveAPI {
         parent_id: &str,
         name: &str,
     ) -> Result<String> {
-        Ok(self
-            .inner
-            .create_folder(drive_id, parent_id, name)
-            .await?
-            .file_id)
+        let resp = self.inner.create_folder(drive_id, parent_id, name).await?;
+        match resp {
+            CreateFileResponse::CreateFileRecord { file_id, .. } => Ok(file_id),
+            _ => Err("create folder failed".into()),
+        }
     }
 
     pub async fn upload_file(
@@ -200,7 +200,35 @@ impl ADriveAPI {
         if file_path.is_dir() {
             return Err("file_path is a directory".into());
         }
+
+        let pre_hash = ADriveCoreAPI::get_pre_hash(&file_path)?;
         let file_name = file_path.file_name().unwrap().to_str().unwrap();
+
+        let resp = self
+            .inner
+            .check_pre_hash(drive_id, parent_id, file_name, &pre_hash)
+            .await?;
+
+        match resp {
+            CreateFileResponse::CreateFileRecord {
+                drive_id,
+                file_id,
+                status,
+                parent_file_id,
+                upload_id,
+                file_name,
+                available,
+                exist,
+                rapid_upload,
+                part_info_list,
+            } => {
+                todo!()
+            }
+            _ => {
+                todo!()
+            }
+        }
+
         let part_info_list = self.inner.create_part_info_list(&file_path)?;
         let resp = self
             .inner

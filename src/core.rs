@@ -1,4 +1,5 @@
 use reqwest::header::HeaderMap;
+use sha1_smol::Sha1;
 
 use crate::data::{
     AsyncTaskResponse, BatchGetFileDetailByIdRequest, CompleteUploadRequest, CopyFileRequest,
@@ -14,7 +15,7 @@ use crate::data::{
 
 use crate::auth;
 use crate::data::FileType;
-use std::io::{Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom};
 use std::os::unix::fs::MetadataExt;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::{error, fs, io::Write, path::PathBuf, result};
@@ -297,9 +298,21 @@ impl ADriveCoreAPI {
         dir_name: &str,
     ) -> Result<CreateFileResponse> {
         let token = &self.auth.refresh_if_needed().await?;
-        CreateFileRequest::new(drive_id, parent_file_id, dir_name, FileType::Folder, None)
-            .dispatch(None, Some(&token.access_token))
-            .await
+        CreateFileRequest::new(
+            drive_id,
+            parent_file_id,
+            dir_name,
+            FileType::Folder,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .dispatch(None, Some(&token.access_token))
+        .await
     }
 
     pub async fn create_file_upload(
@@ -316,6 +329,12 @@ impl ADriveCoreAPI {
             file_name,
             FileType::File,
             part_info_list,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
         )
         .dispatch(None, Some(&token.access_token))
         .await
@@ -444,4 +463,44 @@ impl ADriveCoreAPI {
         .dispatch(None, Some(&token.access_token))
         .await
     }
+
+    pub fn get_pre_hash(file_path: &PathBuf) -> Result<String> {
+        let mut file = fs::File::open(file_path)?;
+        // TODO 1024?
+        let mut buffer = vec![0u8; 1024];
+        let count = file.read(&mut buffer)?;
+        let data = &buffer[..count];
+        let mut hasher = Sha1::new();
+        hasher.update(data);
+        Ok(hasher.digest().to_string().to_uppercase())
+    }
+
+    fn get_proof_code() {}
+
+    pub async fn check_pre_hash(
+        &self,
+        drive_id: &str,
+        parent_file_id: &str,
+        file_name: &str,
+        pre_hash: &str,
+    ) -> Result<CreateFileResponse> {
+        let token = &self.auth.refresh_if_needed().await?;
+        CreateFileRequest::new(
+            drive_id,
+            parent_file_id,
+            file_name,
+            FileType::File,
+            None,
+            Some(pre_hash),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .dispatch(None, Some(&token.access_token))
+        .await
+    }
+
+    pub async fn check_content_hash(&self) {}
 }
