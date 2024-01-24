@@ -290,7 +290,7 @@ impl ADriveCoreAPI {
         Ok(dst_path)
     }
 
-    // 只能创建单层文件夹， dirname 不能是 a/b/c 这种形式
+    // 只能创建单层文件夹，dirname 不能是 a/b/c 这种形式
     pub async fn create_folder(
         &self,
         drive_id: &str,
@@ -464,15 +464,14 @@ impl ADriveCoreAPI {
         .await
     }
 
-    pub fn get_pre_hash(file_path: &PathBuf) -> Result<String> {
-        let mut file = fs::File::open(file_path)?;
+    fn get_pre_hash(file: &mut fs::File) -> Result<String> {
         // TODO 1024?
         let mut buffer = vec![0u8; 1024];
         let count = file.read(&mut buffer)?;
         let data = &buffer[..count];
         let mut hasher = Sha1::new();
         hasher.update(data);
-        Ok(hasher.digest().to_string().to_uppercase())
+        Ok(hasher.hexdigest().to_uppercase())
     }
 
     fn get_proof_code() {}
@@ -483,6 +482,7 @@ impl ADriveCoreAPI {
         parent_file_id: &str,
         file_name: &str,
         pre_hash: &str,
+        size: u64,
     ) -> Result<CreateFileResponse> {
         let token = &self.auth.refresh_if_needed().await?;
         CreateFileRequest::new(
@@ -492,7 +492,7 @@ impl ADriveCoreAPI {
             FileType::File,
             None,
             Some(pre_hash),
-            None,
+            Some(size),
             None,
             None,
             None,
@@ -503,4 +503,48 @@ impl ADriveCoreAPI {
     }
 
     pub async fn check_content_hash(&self) {}
+
+    pub async fn upload_file_with_check(
+        &self,
+        drive_id: &str,
+        parent_file_id: &str,
+        file_name: &str,
+        file: &mut fs::File,
+        pre_hash_checked: bool,
+        content_hash_checked: bool,
+    ) -> Result<()> {
+        if !pre_hash_checked {
+            let pre_hash = Self::get_pre_hash(file)?;
+            println!("{}", pre_hash);
+            let resp = self
+                .check_pre_hash(
+                    drive_id,
+                    parent_file_id,
+                    file_name,
+                    &pre_hash,
+                    file.metadata()?.size(),
+                )
+                .await?;
+            match resp {
+                CreateFileResponse::FileCreated {
+                    drive_id,
+                    file_id,
+                    status,
+                    parent_file_id,
+                    upload_id,
+                    file_name,
+                    available,
+                    exist,
+                    rapid_upload,
+                    part_info_list,
+                } => {
+                    println!("OK")
+                }
+                CreateFileResponse::PreHashMatched { code } => {
+                    println!("{}", code,)
+                }
+            }
+        }
+        unimplemented!()
+    }
 }

@@ -425,8 +425,9 @@ impl Request for CreateFileRequest<'_> {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(untagged)]
 pub enum CreateFileResponse {
-    CreateFileRecord {
+    FileCreated {
         drive_id: String,
         file_id: String,
         status: Option<String>,
@@ -438,12 +439,8 @@ pub enum CreateFileResponse {
         rapid_upload: Option<bool>,
         part_info_list: Option<Vec<PartInfo>>,
     },
-    MatchPreHash {
-        parent_file_id: String,
-        file_name: String,
-        pre_hash: String,
+    PreHashMatched {
         code: String,
-        message: String,
     },
 }
 

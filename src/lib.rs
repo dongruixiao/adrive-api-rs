@@ -185,7 +185,7 @@ impl ADriveAPI {
     ) -> Result<String> {
         let resp = self.inner.create_folder(drive_id, parent_id, name).await?;
         match resp {
-            CreateFileResponse::CreateFileRecord { file_id, .. } => Ok(file_id),
+            CreateFileResponse::FileCreated { file_id, .. } => Ok(file_id),
             _ => Err("create folder failed".into()),
         }
     }
