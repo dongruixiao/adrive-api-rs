@@ -337,7 +337,7 @@ impl Request for DownloadFileRequest<'_> {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct PartInfo {
     pub part_number: u16,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -442,6 +442,45 @@ pub enum CreateFileResponse {
     PreHashMatched {
         code: String,
     },
+}
+
+impl CreateFileResponse {
+    pub fn pre_hash_matched(&self) -> bool {
+        match self {
+            CreateFileResponse::PreHashMatched { code } => code == "PreHashMatched",
+            _ => false,
+        }
+    }
+
+    pub fn content_hash_matched(&self) -> bool {
+        match self {
+            CreateFileResponse::FileCreated { rapid_upload, .. } => rapid_upload.unwrap_or(false),
+            _ => false,
+        }
+    }
+
+    pub fn upload_id(&self) -> String {
+        match self {
+            CreateFileResponse::FileCreated { upload_id, .. } => upload_id.clone().unwrap(),
+            _ => panic!("upload_id not found"),
+        }
+    }
+
+    pub fn file_id(&self) -> String {
+        match self {
+            CreateFileResponse::FileCreated { file_id, .. } => file_id.clone(),
+            _ => panic!("file_id not found"),
+        }
+    }
+
+    pub fn part_info_list(&self) -> Vec<PartInfo> {
+        match self {
+            CreateFileResponse::FileCreated { part_info_list, .. } => {
+                part_info_list.clone().unwrap()
+            }
+            _ => panic!("part_info_list not found"),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Default)]

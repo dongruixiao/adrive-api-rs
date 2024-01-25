@@ -8,11 +8,7 @@ pub use data::{
     CreateFileResponse, FileEntry, GetDriveInfoResponse as DriveInfo,
     GetSpaceInfoResponse as SpaceInfo, GetUserInfoResponse as UserInfo, Request,
 };
-use std::{
-    fs,
-    io::{Read, Seek, SeekFrom},
-    path::PathBuf,
-};
+use std::{fs, path::PathBuf};
 
 pub struct ADriveAPI {
     inner: ADriveCoreAPI,
@@ -195,73 +191,16 @@ impl ADriveAPI {
         drive_id: &str,
         parent_id: &str,
         file_path: &str,
-    ) -> Result<FileEntry> {
+    ) -> Result<()> {
         let file_path = PathBuf::from(file_path);
         if file_path.is_dir() {
             return Err("file_path is a directory".into());
         }
 
-        let pre_hash = ADriveCoreAPI::get_pre_hash(&file_path)?;
         let file_name = file_path.file_name().unwrap().to_str().unwrap();
-
-        let resp = self
-            .inner
-            .check_pre_hash(drive_id, parent_id, file_name, &pre_hash)
-            .await?;
-
-        match resp {
-            CreateFileResponse::CreateFileRecord {
-                drive_id,
-                file_id,
-                status,
-                parent_file_id,
-                upload_id,
-                file_name,
-                available,
-                exist,
-                rapid_upload,
-                part_info_list,
-            } => {
-                todo!()
-            }
-            _ => {
-                todo!()
-            }
-        }
-
-        let part_info_list = self.inner.create_part_info_list(&file_path)?;
-        let resp = self
-            .inner
-            .create_file_upload(drive_id, parent_id, file_name, Some(part_info_list))
-            .await?;
-
-        let part_info_list = resp.part_info_list.unwrap();
-        for part_info in part_info_list.iter() {
-            let mut file = fs::File::open(&file_path)?;
-            let mut buffer = Vec::new();
-            let pos = (part_info.part_number as u64 - 1) * ADriveCoreAPI::PART_SIZE;
-            let _ = file.seek(SeekFrom::Start(pos));
-            let _ = file.take(ADriveCoreAPI::PART_SIZE).read_to_end(&mut buffer);
-            self.inner.upload_part(part_info, buffer).await?;
-        }
-
-        let mut marker = None;
-        let mut uploaded = Vec::new();
-        let upload_id = resp.upload_id.unwrap();
-        loop {
-            let resp = self
-                .inner
-                .list_uploaded_parts(drive_id, &resp.file_id, &upload_id, marker)
-                .await?;
-            uploaded.extend(resp.uploaded_parts);
-            marker = Some(resp.next_part_number_marker);
-            if marker.is_none() || marker.as_deref() == Some("") {
-                break;
-            }
-        }
-        assert!(uploaded.len() == part_info_list.len());
+        let mut file = fs::File::open(&file_path)?;
         self.inner
-            .complete_file_upload(drive_id, &resp.file_id, &upload_id)
+            .upload_file(drive_id, parent_id, file_name, &mut file)
             .await
     }
 

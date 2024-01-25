@@ -1,4 +1,3 @@
-use axum::http::Error;
 use base64::prelude::*;
 use reqwest::header::HeaderMap;
 use sha1_smol::Sha1;
@@ -17,7 +16,6 @@ use crate::data::{
 
 use crate::auth;
 use crate::data::FileType;
-use async_recursion::async_recursion;
 use std::cmp;
 use std::io::{Read, Seek, SeekFrom};
 use std::os::unix::fs::MetadataExt;
@@ -319,7 +317,7 @@ impl ADriveCoreAPI {
         .await
     }
 
-    pub async fn create_file_upload(
+    pub async fn create_multipart_upload(
         &self,
         drive_id: &str,
         parent_file_id: &str,
@@ -357,7 +355,7 @@ impl ADriveCoreAPI {
             .await
     }
 
-    pub async fn list_uploaded_parts(
+    pub async fn list_multipart_uploaded(
         &self,
         drive_id: &str,
         file_id: &str,
@@ -370,7 +368,7 @@ impl ADriveCoreAPI {
             .await
     }
 
-    pub async fn complete_file_upload(
+    pub async fn complete_multipart_upload(
         &self,
         drive_id: &str,
         file_id: &str,
@@ -467,8 +465,9 @@ impl ADriveCoreAPI {
         .await
     }
 
-    fn get_pre_hash(file: &mut fs::File) -> Result<String> {
+    pub fn get_pre_hash(file: &mut fs::File) -> Result<String> {
         // TODO 1024?
+        file.seek(SeekFrom::Start(0))?;
         let mut buffer = vec![0u8; 1024];
         let count = file.read(&mut buffer)?;
         let data = &buffer[..count];
@@ -482,16 +481,17 @@ impl ADriveCoreAPI {
         drive_id: &str,
         parent_file_id: &str,
         file_name: &str,
+        part_info_list: Vec<PartInfo>,
         pre_hash: &str,
         size: u64,
-    ) -> Result<bool> {
+    ) -> Result<CreateFileResponse> {
         let token = &self.auth.refresh_if_needed().await?;
-        let resp = CreateFileRequest::new(
+        CreateFileRequest::new(
             drive_id,
             parent_file_id,
             file_name,
             FileType::File,
-            None,
+            Some(part_info_list),
             Some(pre_hash),
             Some(size),
             None,
@@ -500,39 +500,11 @@ impl ADriveCoreAPI {
             None,
         )
         .dispatch(None, Some(&token.access_token))
-        .await?;
-
-        match resp {
-            CreateFileResponse::FileCreated {
-                drive_id,
-                parent_file_id,
-                file_name,
-                ..
-            } => {
-                // file.seek(SeekFrom::Start(0))?;
-                // return self
-                //     .upload_file_with_check(
-                //         &drive_id,
-                //         &parent_file_id,
-                //         &file_name,
-                //         file,
-                //         true,
-                //         true,
-                //     )
-                //     .await;
-                Ok(false)
-            }
-            CreateFileResponse::PreHashMatched { code } => {
-                if code == "PreHashMatched".to_string() {
-                    Ok(true)
-                } else {
-                    Ok(false)
-                }
-            }
-        }
+        .await
     }
 
     fn get_content_hash(file: &mut fs::File) -> Result<String> {
+        file.seek(SeekFrom::Start(0))?;
         let mut hasher = Sha1::new();
         let mut buffer = vec![0u8; 10 * 1024];
         loop {
@@ -547,6 +519,7 @@ impl ADriveCoreAPI {
     }
 
     fn get_proof_code(file: &mut fs::File, size: u64, token: &str) -> Result<String> {
+        file.seek(SeekFrom::Start(0))?;
         if size <= 0 {
             return Ok(String::from(""));
         }
@@ -569,6 +542,7 @@ impl ADriveCoreAPI {
         drive_id: &str,
         parent_file_id: &str,
         file_name: &str,
+        part_info_list: Vec<PartInfo>,
         content_hash: &str,
         proof_code: &str,
         size: u64,
@@ -579,7 +553,7 @@ impl ADriveCoreAPI {
             parent_file_id,
             file_name,
             FileType::File,
-            None,
+            Some(part_info_list),
             None,
             Some(size),
             Some(proof_code),
@@ -591,102 +565,17 @@ impl ADriveCoreAPI {
         .await
     }
 
-    #[async_recursion]
-    pub async fn upload_file_with_check(
-        &self,
-        drive_id: &str,
-        parent_file_id: &str,
-        file_name: &str,
-        file: &mut fs::File,
-        pre_hash_checked: bool,
-        content_hash_checked: bool,
-    ) -> Result<()> {
-        if !pre_hash_checked {
-            let pre_hash = Self::get_pre_hash(file)?;
-            let resp = self
-                .check_pre_hash(
-                    drive_id,
-                    parent_file_id,
-                    file_name,
-                    &pre_hash,
-                    file.metadata()?.size(),
-                )
-                .await?;
-            match resp {
-                CreateFileResponse::FileCreated {
-                    drive_id,
-                    parent_file_id,
-                    file_name,
-                    ..
-                } => {
-                    file.seek(SeekFrom::Start(0))?;
-                    return self
-                        .upload_file_with_check(
-                            &drive_id,
-                            &parent_file_id,
-                            &file_name,
-                            file,
-                            true,
-                            true,
-                        )
-                        .await;
-                }
-                CreateFileResponse::PreHashMatched { code } => {
-                    return self
-                        .upload_file_with_check(
-                            drive_id,
-                            parent_file_id,
-                            file_name,
-                            file,
-                            true,
-                            false,
-                        )
-                        .await
-                }
-            }
-        }
-        if !content_hash_checked {
-            let content_hash = Self::get_content_hash(file)?;
-            let size = file.metadata()?.size() as u64;
-            let token = &self.auth.refresh_if_needed().await?;
-            let proof_code = Self::get_proof_code(file, size, &token.access_token)?;
-            let resp = self
-                .check_content_hash(
-                    drive_id,
-                    parent_file_id,
-                    file_name,
-                    &content_hash,
-                    &proof_code,
-                    size,
-                )
-                .await?;
-            match resp {
-                CreateFileResponse::FileCreated { rapid_upload, .. } => {
-                    if rapid_upload == Some(true) {
-                        return Ok(());
-                    } else {
-                        return self
-                            .upload_file_with_check(
-                                drive_id,
-                                parent_file_id,
-                                file_name,
-                                file,
-                                true,
-                                true,
-                            )
-                            .await;
-                    }
-                }
-                _ => return Err("".into()),
-            }
-        }
-        let resp = self
-            .multipart_upload_file(drive_id, parent_file_id, file_name, file)
-            .await?;
-        Ok(resp)
-    }
+    /*
 
-    pub async fn multipart_upload_file(
+             checkPreHash
+                /     \
+    checkContentHash   uploadFile with part_info_list
+        /   \
+    return  uploadFile with part_info_list
+
+    */
+
+    pub async fn upload_file(
         &self,
         drive_id: &str,
         parent_file_id: &str,
@@ -695,43 +584,118 @@ impl ADriveCoreAPI {
     ) -> Result<()> {
         let file_size = file.metadata()?.size();
         let part_info_list = Self::create_part_info_list(file_size)?;
+        let pre_hash = Self::get_pre_hash(file)?;
         let resp = self
-            .create_file_upload(drive_id, parent_file_id, file_name, Some(part_info_list))
+            .check_pre_hash(
+                drive_id,
+                parent_file_id,
+                file_name,
+                part_info_list.clone(),
+                &pre_hash,
+                file_size,
+            )
             .await?;
-
-        match resp {
-            CreateFileResponse::FileCreated {
-                file_id,
-                upload_id,
-                part_info_list,
-                ..
-            } => {
-                let part_info_list = part_info_list.unwrap();
-                for part_info in part_info_list.iter() {
-                    let mut buffer = Vec::new();
-                    let pos = (part_info.part_number as u64 - 1) * ADriveCoreAPI::PART_SIZE;
-                    let _ = file.seek(SeekFrom::Start(pos));
-                    let _ = file.take(ADriveCoreAPI::PART_SIZE).read_to_end(&mut buffer);
-                    self.upload_part(part_info, buffer).await?;
-                }
-
-                let mut marker = None;
-                let mut uploaded = Vec::new();
-                loop {
-                    let upload_id = upload_id.as_ref().unwrap();
-                    let resp = self
-                        .list_uploaded_parts(drive_id, &file_id, &upload_id, marker)
-                        .await?;
-                    uploaded.extend(resp.uploaded_parts);
-                    marker = Some(resp.next_part_number_marker);
-                    if marker.is_none() || marker.as_deref() == Some("") {
-                        break;
-                    }
-                }
-                assert!(uploaded.len() == part_info_list.len());
-                Ok(())
+        if resp.pre_hash_matched() {
+            println!("pre_hash_matched");
+            let content_hash = Self::get_content_hash(file)?;
+            let token = self.auth.refresh_if_needed().await?;
+            let proof_code = Self::get_proof_code(file, file_size, &token.access_token)?;
+            let resp = self
+                .check_content_hash(
+                    drive_id,
+                    parent_file_id,
+                    file_name,
+                    part_info_list,
+                    &content_hash,
+                    &proof_code,
+                    file_size,
+                )
+                .await?;
+            if resp.content_hash_matched() {
+                println!("content_hash_matched");
+                println!("{:#?}", resp);
+                return Ok(());
+            } else {
+                println!("content_hash_not_matched");
+                return self
+                    .multipart_upload_file(
+                        drive_id,
+                        parent_file_id,
+                        file_name,
+                        file_size,
+                        file,
+                        Some(resp),
+                    )
+                    .await;
             }
-            _ => Err("".into()),
+        } else {
+            println!("pre_hash_not_matched");
+            return self
+                .multipart_upload_file(
+                    drive_id,
+                    parent_file_id,
+                    file_name,
+                    file_size,
+                    file,
+                    Some(resp),
+                )
+                .await;
         }
+    }
+
+    pub async fn multipart_upload_file(
+        &self,
+        drive_id: &str,
+        parent_file_id: &str,
+        file_name: &str,
+        file_size: u64,
+        file: &mut fs::File,
+        created_file: Option<CreateFileResponse>,
+    ) -> Result<()> {
+        let file_id;
+        let upload_id;
+        let part_info_list_with_upload_url;
+
+        if created_file.is_none() {
+            let part_info_list = Self::create_part_info_list(file_size)?;
+            let resp = self
+                .create_multipart_upload(drive_id, parent_file_id, file_name, Some(part_info_list))
+                .await?;
+            file_id = resp.file_id();
+            upload_id = resp.upload_id();
+            part_info_list_with_upload_url = resp.part_info_list();
+        } else {
+            let response = created_file.unwrap();
+            file_id = response.file_id();
+            upload_id = response.upload_id();
+            part_info_list_with_upload_url = response.part_info_list();
+        }
+
+        for part_info in part_info_list_with_upload_url.iter() {
+            let mut buffer = Vec::new();
+            let pos = (part_info.part_number as u64 - 1) * ADriveCoreAPI::PART_SIZE;
+            let _ = file.seek(SeekFrom::Start(pos));
+            let _ = file.take(ADriveCoreAPI::PART_SIZE).read_to_end(&mut buffer);
+            self.upload_part(part_info, buffer).await?;
+        }
+
+        let mut marker = None;
+        let mut uploaded = Vec::new();
+        loop {
+            let resp = self
+                .list_multipart_uploaded(drive_id, &file_id, &upload_id, marker)
+                .await?;
+            uploaded.extend(resp.uploaded_parts);
+            marker = Some(resp.next_part_number_marker);
+            if marker.is_none() || marker.as_deref() == Some("") {
+                break;
+            }
+        }
+        assert!(uploaded.len() == part_info_list_with_upload_url.len());
+        let _ = self
+            .complete_multipart_upload(drive_id, &file_id, &upload_id)
+            .await?;
+        println!("uploaded");
+        Ok(())
     }
 }
