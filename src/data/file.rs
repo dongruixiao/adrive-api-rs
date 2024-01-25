@@ -337,7 +337,7 @@ impl Request for DownloadFileRequest<'_> {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct PartInfo {
     pub part_number: u16,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -394,6 +394,12 @@ impl<'a> CreateFileRequest<'a> {
         name: &'a str,
         r#type: FileType,
         part_info_list: Option<Vec<PartInfo>>,
+        pre_hash: Option<&'a str>,          // content_hash needed
+        size: Option<u64>,                  // content_hash needed
+        proof_code: Option<&'a str>,        // content_hash needed
+        proof_version: Option<&'a str>,     // content_hash needed, default v1
+        content_hash: Option<&'a str>,      // content_hash needed
+        content_hash_name: Option<&'a str>, // content_hash needed, default sha1
     ) -> Self {
         Self {
             drive_id,
@@ -401,6 +407,12 @@ impl<'a> CreateFileRequest<'a> {
             name,
             r#type,
             part_info_list,
+            pre_hash,
+            size,
+            proof_code,
+            proof_version,
+            content_hash,
+            content_hash_name,
             ..Default::default()
         }
     }
@@ -413,17 +425,62 @@ impl Request for CreateFileRequest<'_> {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct CreateFileResponse {
-    pub drive_id: String,
-    pub file_id: String,
-    pub status: Option<String>,
-    pub parent_file_id: String,
-    pub upload_id: Option<String>,
-    pub file_name: String,
-    pub available: Option<bool>,
-    pub exist: Option<bool>,
-    pub rapid_upload: Option<bool>,
-    pub part_info_list: Option<Vec<PartInfo>>,
+#[serde(untagged)]
+pub enum CreateFileResponse {
+    FileCreated {
+        drive_id: String,
+        file_id: String,
+        status: Option<String>,
+        parent_file_id: String,
+        upload_id: Option<String>,
+        file_name: String,
+        available: Option<bool>,
+        exist: Option<bool>,
+        rapid_upload: Option<bool>,
+        part_info_list: Option<Vec<PartInfo>>,
+    },
+    PreHashMatched {
+        code: String,
+    },
+}
+
+impl CreateFileResponse {
+    pub fn pre_hash_matched(&self) -> bool {
+        match self {
+            CreateFileResponse::PreHashMatched { code } => code == "PreHashMatched",
+            _ => false,
+        }
+    }
+
+    pub fn content_hash_matched(&self) -> bool {
+        match self {
+            CreateFileResponse::FileCreated { rapid_upload, .. } => rapid_upload.unwrap_or(false),
+            _ => false,
+        }
+    }
+
+    pub fn upload_id(&self) -> String {
+        match self {
+            CreateFileResponse::FileCreated { upload_id, .. } => upload_id.clone().unwrap(),
+            _ => panic!("upload_id not found"),
+        }
+    }
+
+    pub fn file_id(&self) -> String {
+        match self {
+            CreateFileResponse::FileCreated { file_id, .. } => file_id.clone(),
+            _ => panic!("file_id not found"),
+        }
+    }
+
+    pub fn part_info_list(&self) -> Vec<PartInfo> {
+        match self {
+            CreateFileResponse::FileCreated { part_info_list, .. } => {
+                part_info_list.clone().unwrap()
+            }
+            _ => panic!("part_info_list not found"),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Default)]
