@@ -136,7 +136,7 @@ impl ADriveAPI {
         file_ids: &[&str],
     ) -> Result<Vec<FileEntry>> {
         let mut items = Vec::new();
-        for chunk in file_ids.chunks(100) {
+        for chunk in file_ids.chunks(constants::MAX_BATCH_SIZE) {
             let resp = self.inner.batch_get_files(drive_id, chunk).await?;
             items.extend(resp.items);
         }
@@ -293,13 +293,13 @@ impl ADriveAPI {
         &self,
         drive_id: &str,
         file_id: &str,
-        name: &str,
+        rename_as: &str,
     ) -> Result<FileEntry> {
         self.inner
             .update_file(
                 drive_id,
                 file_id,
-                Some(name),
+                Some(rename_as),
                 Some(IfNameExists::AutoRename),
                 None,
             )
@@ -311,10 +311,10 @@ impl ADriveAPI {
         drive_id: &str,
         file_id: &str,
         target_parent_id: &str,
-        rename: Option<&str>,
+        rename_as: Option<&str>,
     ) -> Result<()> {
         self.inner
-            .move_file(drive_id, file_id, target_parent_id, rename)
+            .move_file(drive_id, file_id, target_parent_id, rename_as)
             .await?;
         Ok(())
     }
