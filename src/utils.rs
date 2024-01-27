@@ -13,7 +13,7 @@ pub fn ensure_dirs(dir: &str) -> crate::Result<PathBuf> {
 
 pub fn get_proof_code(file: &mut fs::File, size: u64, token: &str) -> crate::Result<String> {
     file.seek(SeekFrom::Start(0))?;
-    if size <= 0 {
+    if size == 0 {
         return Ok(String::from(""));
     }
     let digest = md5::compute(token);

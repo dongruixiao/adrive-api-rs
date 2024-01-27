@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod constants;
 pub mod core;
 pub mod data;
 pub mod utils;
@@ -9,7 +10,12 @@ pub use data::{
     CreateFileResponse, FileEntry, GetDriveInfoResponse as DriveInfo,
     GetSpaceInfoResponse as SpaceInfo, GetUserInfoResponse as UserInfo, Request,
 };
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::PathBuf,
+    sync::{Arc, Mutex, OnceLock},
+};
+pub static TOKIO_RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 
 pub struct ADriveAPI {
     inner: ADriveCoreAPI,
@@ -141,37 +147,103 @@ impl ADriveAPI {
         Ok(self.inner.get_download_url(drive_id, file_id).await?.url)
     }
 
-    pub async fn download_file_directly(
+    pub async fn download_file(
         &self,
         drive_id: &str,
         file_id: &str,
         target_dir: &str,
-    ) -> Result<PathBuf> {
-        self.inner
-            .download_file_directly(drive_id, file_id, target_dir, None)
-            .await
+        rename_as: Option<&str>,
+    ) -> Result<()> {
+        let target_dir = utils::ensure_dirs(target_dir)?;
+        let detail = self.get_file_by_id(drive_id, file_id).await?;
+        let dst_path = target_dir.join(rename_as.unwrap_or(&detail.name));
+        let download_url = self.get_download_url(drive_id, file_id).await?;
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .append(true)
+            .create(true)
+            .open(&dst_path)?;
+        let mut start = file.metadata().map_or(0, |m| m.len());
+        let file_size = detail.size.unwrap();
+        loop {
+            if start >= file_size {
+                break;
+            }
+            let end = start + constants::CHUNK_SIZE - 1;
+            let end = if end >= file_size {
+                None
+            } else {
+                Some(end.to_string())
+            };
+            self.inner
+                .download_file(
+                    drive_id,
+                    file_id,
+                    &mut file,
+                    Some(&download_url),
+                    Some(&start.to_string()),
+                    end.as_deref(),
+                )
+                .await?;
+            start += constants::CHUNK_SIZE;
+        }
+        Ok(())
     }
 
-    pub async fn download_file_continuously(
-        &self,
-        drive_id: &str,
-        file_id: &str,
-        target_dir: &str,
-    ) -> Result<PathBuf> {
-        self.inner
-            .download_file_continuously(drive_id, file_id, target_dir, None)
-            .await
+    fn runtime() -> &'static tokio::runtime::Runtime {
+        TOKIO_RUNTIME.get_or_init(|| {
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(constants::MAX_CONCURRENCY)
+                .enable_all()
+                .build()
+                .unwrap()
+        })
     }
 
-    pub async fn download_file_concurrency(
+    pub async fn concurrent_download_file(
         &self,
         drive_id: &str,
         file_id: &str,
         target_dir: &str,
-    ) -> Result<PathBuf> {
-        self.inner
-            .download_file_concurrency(drive_id, file_id, target_dir, None)
-            .await
+        rename_as: Option<&str>,
+    ) -> Result<()> {
+        let target_dir = utils::ensure_dirs(target_dir)?;
+        let detail = self.get_file_by_id(drive_id, file_id).await?;
+        let dst_path = target_dir.join(rename_as.unwrap_or(&detail.name));
+        let download_url = self.get_download_url(drive_id, file_id).await?;
+
+        let file_handle = Arc::new(Mutex::new(fs::File::create(&dst_path)?));
+        let file_size = detail.size.unwrap();
+        let mut start = 0_u64;
+        let mut futures = Vec::new();
+        let token = self.inner.get_token().await?.refresh_token;
+        loop {
+            if start >= file_size {
+                break;
+            }
+            let end = start + constants::CHUNK_SIZE - 1;
+            let end = if end >= file_size {
+                None
+            } else {
+                Some(end.to_string())
+            };
+            let download_url = download_url.clone();
+            let token = token.clone();
+            let file_handle = Arc::clone(&file_handle);
+            let future = Self::runtime().spawn(ADriveCoreAPI::download_file2(
+                file_handle,
+                download_url,
+                token,
+                Some(start.to_string()),
+                end,
+            ));
+            futures.push(future);
+            start += constants::CHUNK_SIZE;
+        }
+        for future in futures {
+            future.await?;
+        }
+        Ok(())
     }
 
     pub async fn create_folder(

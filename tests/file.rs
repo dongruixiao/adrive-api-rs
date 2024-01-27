@@ -43,8 +43,8 @@ async fn test_file() -> Result<()> {
 
     let file_id = "62e89bd3b9d6ab9196c949a8b6a0f63a4dc22857";
     let target_dir = "./tmp";
-    let resp = adrive_api
-        .download_file_continuously(&drive_id, file_id, target_dir)
+    adrive_api
+        .concurrent_download_file(&drive_id, file_id, target_dir, None)
         .await?;
     println!("{:#?}", resp);
 

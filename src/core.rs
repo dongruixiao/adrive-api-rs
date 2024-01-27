@@ -1,23 +1,23 @@
-use crate::auth;
 use crate::data::{
     AsyncTaskResponse, BatchGetFileDetailByIdRequest, CompleteUploadRequest, CopyFileRequest,
     CreateFileRequest, CreateFileResponse, DeleteFileRequest, DownloadFileRequest, FileEntry,
     FileSearchingRequest, FileSearchingResponse, FileType, FlushUploadUrlRequest,
-    FlushUploadUrlResponse, GetAsyncTaskStateRequest, GetAsyncTaskStateResponse,
-    GetDownloadUrlByIdRequest, GetDownloadUrlByIdResponse, GetDriveInfoRequest,
-    GetDriveInfoResponse, GetFileDetailByIdRequest, GetFileDetailByPathRequest, GetFileListRequest,
-    GetFileListResponse, GetFileStarredListRequest, GetSpaceInfoRequest, GetSpaceInfoResponse,
-    GetUserInfoRequest, GetUserInfoResponse, IfNameExists, ListUploadedPartsRequest,
-    ListUploadedPartsResponse, MoveFileRequest, OrderBy, PartInfo, RecycleFileRequest, Request,
-    SortBy, UpdateFileRequest,
+    FlushUploadUrlResponse, GetAccessTokenResponse, GetAsyncTaskStateRequest,
+    GetAsyncTaskStateResponse, GetDownloadUrlByIdRequest, GetDownloadUrlByIdResponse,
+    GetDriveInfoRequest, GetDriveInfoResponse, GetFileDetailByIdRequest,
+    GetFileDetailByPathRequest, GetFileListRequest, GetFileListResponse, GetFileStarredListRequest,
+    GetSpaceInfoRequest, GetSpaceInfoResponse, GetUserInfoRequest, GetUserInfoResponse,
+    IfNameExists, ListUploadedPartsRequest, ListUploadedPartsResponse, MoveFileRequest, OrderBy,
+    PartInfo, RecycleFileRequest, Request, SortBy, UpdateFileRequest,
 };
 use crate::utils;
+use crate::{auth, constants};
 
 use reqwest::header::HeaderMap;
 use std::io::{Read, Seek, SeekFrom};
 use std::os::unix::fs::MetadataExt;
 use std::sync::{Arc, Mutex, OnceLock};
-use std::{error, fs, io::Write, path::PathBuf, result};
+use std::{error, fs, io::Write, result};
 
 pub type Result<T> = result::Result<T, Box<dyn error::Error>>;
 pub static TOKIO_RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
@@ -39,6 +39,9 @@ impl ADriveCoreAPI {
         }
     }
 
+    pub async fn get_token(&self) -> Result<GetAccessTokenResponse> {
+        self.auth.refresh_if_needed().await
+    }
     pub async fn get_user_info(&self) -> Result<GetUserInfoResponse> {
         let token = self.auth.refresh_if_needed().await?;
         let resp = GetUserInfoRequest {}
@@ -131,7 +134,7 @@ impl ADriveCoreAPI {
         drive_id: &str,
         file_ids: &[&str],
     ) -> Result<GetFileListResponse> {
-        if file_ids.len() > 100 {
+        if file_ids.len() > constants::MAX_BATCH_SIZE {
             return Err("the max batch size should not exceed 100".into());
         }
         let token = self.auth.refresh_if_needed().await?;
@@ -151,136 +154,72 @@ impl ADriveCoreAPI {
             .await
     }
 
-    const CONCURRENCY: usize = 10;
-
-    fn runtime() -> &'static tokio::runtime::Runtime {
-        TOKIO_RUNTIME.get_or_init(|| {
-            tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(Self::CONCURRENCY)
-                .enable_all()
-                .build()
-                .unwrap()
-        })
-    }
-
-    pub async fn download_file_directly(
+    pub async fn download_file(
         &self,
         drive_id: &str,
         file_id: &str,
-        target_dir: &str,
-        file_name: Option<&str>,
-    ) -> Result<PathBuf> {
+        file_handle: &mut fs::File,
+        download_url: Option<&str>,
+        start: Option<&str>,
+        end: Option<&str>,
+    ) -> Result<()> {
         let token = self.auth.refresh_if_needed().await?;
-        let url = self.get_download_url(drive_id, file_id).await?.url;
-        let dst_path = if let Some(file_name) = file_name {
-            utils::ensure_dirs(target_dir)?.join(file_name)
+        let url = if let Some(url) = download_url {
+            url.to_string()
         } else {
-            let file_name = self.get_file_by_id(drive_id, file_id).await?.name;
-            utils::ensure_dirs(target_dir)?.join(file_name)
+            self.get_download_url(drive_id, file_id).await?.url
         };
+        let mut headers = HeaderMap::new();
+        if start.is_some() || end.is_some() {
+            headers.append(
+                "Range",
+                format!(
+                    "bytes={}-{}",
+                    start.unwrap_or_default(),
+                    end.unwrap_or_default()
+                )
+                .parse()?,
+            );
+        }
         let bytes = DownloadFileRequest { url: &url }
-            .get_original(None, Some(&token.access_token))
+            .get_original(Some(headers), Some(&token.access_token))
             .await?
             .bytes()
             .await?;
-        fs::File::create(&dst_path)?.write_all(&bytes)?;
-        Ok(dst_path)
+        Ok(file_handle.write_all(&bytes)?)
     }
 
-    pub async fn download_file_continuously(
-        &self,
-        drive_id: &str,
-        file_id: &str,
-        target_dir: &str,
-        file_name: Option<&str>,
-    ) -> Result<PathBuf> {
-        let token = self.auth.refresh_if_needed().await?;
-        let url = self.get_download_url(drive_id, file_id).await?.url;
-        let detail = self.get_file_by_id(drive_id, file_id).await?;
-        let dst_path = utils::ensure_dirs(target_dir)?.join(file_name.unwrap_or(&detail.name));
-
-        if dst_path.exists() {
-            let mut file = fs::OpenOptions::new()
-                .write(true)
-                .append(true)
-                .open(&dst_path)?;
-            let mut headers = HeaderMap::new();
+    pub async fn download_file2(
+        file_handle: Arc<Mutex<fs::File>>,
+        download_url: String,
+        token: String,
+        start: Option<String>,
+        end: Option<String>,
+    ) {
+        let mut headers = HeaderMap::new();
+        if start.is_some() || end.is_some() {
             headers.append(
                 "Range",
-                format!("bytes={}-", file.metadata()?.len()).parse()?,
+                format!(
+                    "bytes={}-{}",
+                    start.as_deref().unwrap_or_default(),
+                    end.as_deref().unwrap_or_default()
+                )
+                .parse()
+                .unwrap(),
             );
-
-            let mut resp = DownloadFileRequest { url: &url }
-                .get_original(Some(headers), Some(&token.access_token))
-                .await?;
-            while let Some(chunk) = resp.chunk().await? {
-                file.write_all(&chunk)?;
-            }
-        } else {
-            let mut file = fs::File::create(&dst_path)?;
-            let mut resp = DownloadFileRequest { url: &url }
-                .get_original(None, Some(&token.access_token))
-                .await?;
-            while let Some(chunk) = resp.chunk().await? {
-                file.write_all(&chunk)?;
-            }
         }
-        Ok(dst_path)
-    }
-
-    pub async fn download_file_concurrency(
-        &self,
-        drive_id: &str,
-        file_id: &str,
-        target_dir: &str,
-        file_name: Option<&str>,
-    ) -> Result<PathBuf> {
-        let token = self.auth.refresh_if_needed().await?;
-        let url = self.get_download_url(drive_id, file_id).await?.url;
-        let detail = self.get_file_by_id(drive_id, file_id).await?;
-        let dst_path = utils::ensure_dirs(target_dir)?.join(file_name.unwrap_or(&detail.name));
-
-        let file = Arc::new(Mutex::new(fs::File::create(&dst_path)?));
-        let mut offset = 0_u64;
-        let chunk = 100 * 1024 * 1024_u64;
-        let mut futures = Vec::new();
-        loop {
-            let mut headers = HeaderMap::new();
-            if offset + chunk - 1 > detail.size.unwrap() {
-                headers.append("Range", format!("bytes={}-", offset).parse()?);
-            } else {
-                headers.append(
-                    "Range",
-                    format!("bytes={}-{}", offset, offset + chunk - 1).parse()?,
-                );
-            };
-            let url = url.clone();
-            let token = token.access_token.clone();
-            let file = Arc::clone(&file);
-            let future = Self::runtime().spawn(async move {
-                println!("{:#?}", headers);
-                let bytes = DownloadFileRequest { url: &url }
-                    .get_original(Some(headers), Some(&token))
-                    .await
-                    .unwrap()
-                    .bytes()
-                    .await
-                    .unwrap();
-                let mut file = file.lock().unwrap();
-                file.seek(SeekFrom::Start(offset)).unwrap();
-                file.write(&bytes).unwrap()
-            });
-            futures.push(future);
-            offset += chunk;
-            if offset > detail.size.unwrap() {
-                break;
-            }
-        }
-        for future in futures {
-            println!("over");
-            future.await?;
-        }
-        Ok(dst_path)
+        let bytes = DownloadFileRequest { url: &download_url }
+            .get_original(Some(headers), Some(&token))
+            .await
+            .unwrap()
+            .bytes()
+            .await
+            .unwrap();
+        let mut file_handle = file_handle.lock().unwrap();
+        let start = start.map_or(0, |v| v.parse::<u64>().unwrap());
+        file_handle.seek(SeekFrom::Start(start)).unwrap();
+        file_handle.write_all(&bytes).unwrap()
     }
 
     // 只能创建单层文件夹，dirname 不能是 a/b/c 这种形式
@@ -346,7 +285,7 @@ impl ADriveCoreAPI {
             .await
     }
 
-    pub async fn list_multipart_uploaded(
+    pub async fn list_multipart_uploads(
         &self,
         drive_id: &str,
         file_id: &str,
@@ -383,7 +322,6 @@ impl ADriveCoreAPI {
 
     pub fn create_part_info_list(size: u64) -> Result<Vec<PartInfo>> {
         let count = (size + Self::PART_SIZE - 1) / Self::PART_SIZE;
-
         let parts = (1..=count)
             .map(|index| PartInfo {
                 part_number: index as u16,
@@ -542,7 +480,6 @@ impl ADriveCoreAPI {
             )
             .await?;
         if resp.pre_hash_matched() {
-            println!("pre_hash_matched");
             let content_hash = utils::get_content_hash(file)?;
             let token = self.auth.refresh_if_needed().await?;
             let proof_code = utils::get_proof_code(file, file_size, &token.access_token)?;
@@ -558,11 +495,8 @@ impl ADriveCoreAPI {
                 )
                 .await?;
             if resp.content_hash_matched() {
-                println!("content_hash_matched");
-                println!("{:#?}", resp);
                 Ok(())
             } else {
-                println!("content_hash_not_matched");
                 self.multipart_upload_file(
                     drive_id,
                     parent_file_id,
@@ -574,7 +508,6 @@ impl ADriveCoreAPI {
                 .await
             }
         } else {
-            println!("pre_hash_not_matched");
             self.multipart_upload_file(
                 drive_id,
                 parent_file_id,
@@ -627,7 +560,7 @@ impl ADriveCoreAPI {
         let mut uploaded = Vec::new();
         loop {
             let resp = self
-                .list_multipart_uploaded(drive_id, &file_id, &upload_id, marker)
+                .list_multipart_uploads(drive_id, &file_id, &upload_id, marker)
                 .await?;
             uploaded.extend(resp.uploaded_parts);
             marker = Some(resp.next_part_number_marker);
@@ -639,7 +572,6 @@ impl ADriveCoreAPI {
         let _ = self
             .complete_multipart_upload(drive_id, &file_id, &upload_id)
             .await?;
-        println!("uploaded");
         Ok(())
     }
 }
