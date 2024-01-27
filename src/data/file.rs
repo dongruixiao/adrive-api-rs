@@ -41,7 +41,7 @@ pub enum IfNameExists {
 }
 
 #[derive(Debug, Serialize, Default)]
-pub struct GetFileListRequest<'a> {
+pub struct ListFilesRequest<'a> {
     drive_id: &'a str,
     parent_file_id: &'a str,
     limit: Option<u32>, // 50..=100
@@ -56,7 +56,7 @@ pub struct GetFileListRequest<'a> {
     fields: Option<&'a str>,            // TODO *
 }
 
-impl<'a> GetFileListRequest<'a> {
+impl<'a> ListFilesRequest<'a> {
     pub fn new(
         drive_id: &'a str,
         parent_file_id: &'a str,
@@ -79,10 +79,10 @@ impl<'a> GetFileListRequest<'a> {
     }
 }
 
-impl Request for GetFileListRequest<'_> {
+impl Request for ListFilesRequest<'_> {
     const URI: &'static str = "/adrive/v1.0/openFile/list";
     const METHOD: reqwest::Method = Method::POST;
-    type Response = GetFileListResponse;
+    type Response = ListFilesResponse;
 }
 #[derive(Debug, Deserialize)]
 pub struct VideoMediaMetadata {
@@ -115,14 +115,17 @@ pub struct FileEntry {
     pub video_preview_metadata: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct GetFileListResponse {
+#[derive(Debug, Deserialize, Default)]
+pub struct ListFilesResponse {
     pub items: Vec<FileEntry>,
+    #[serde(default)]
     pub next_marker: Option<String>,
+    #[serde(default)]
+    pub total_count: Option<u32>,
 }
 
 #[derive(Debug, Serialize, Default)]
-pub struct FileSearchingRequest<'a> {
+pub struct SearchFilesRequest<'a> {
     drive_id: &'a str,
     limit: Option<u32>,
     marker: Option<&'a str>,
@@ -151,7 +154,7 @@ pub struct FileSearchingRequest<'a> {
     return_total_count: Option<bool>,
 }
 
-impl<'a> FileSearchingRequest<'a> {
+impl<'a> SearchFilesRequest<'a> {
     pub fn new(
         drive_id: &'a str,
         query: Option<&'a str>,
@@ -169,21 +172,14 @@ impl<'a> FileSearchingRequest<'a> {
     }
 }
 
-impl Request for FileSearchingRequest<'_> {
+impl Request for SearchFilesRequest<'_> {
     const URI: &'static str = "/adrive/v1.0/openFile/search";
     const METHOD: reqwest::Method = Method::POST;
-    type Response = FileSearchingResponse;
-}
-
-#[derive(Debug, Deserialize)]
-pub struct FileSearchingResponse {
-    pub items: Vec<FileEntry>,
-    pub next_marker: Option<String>,
-    pub total_count: Option<u32>,
+    type Response = ListFilesResponse;
 }
 
 #[derive(Debug, Serialize, Default)]
-pub struct GetFileStarredListRequest<'a> {
+pub struct ListStarredFilesRequest<'a> {
     drive_id: &'a str,
     limit: Option<u32>,
     marker: Option<&'a str>,
@@ -195,7 +191,7 @@ pub struct GetFileStarredListRequest<'a> {
     image_thumbnail_width: Option<u32>,
 }
 
-impl<'a> GetFileStarredListRequest<'a> {
+impl<'a> ListStarredFilesRequest<'a> {
     pub fn new(drive_id: &'a str, marker: Option<&'a str>) -> Self {
         Self {
             drive_id,
@@ -207,14 +203,14 @@ impl<'a> GetFileStarredListRequest<'a> {
     }
 }
 
-impl Request for GetFileStarredListRequest<'_> {
+impl Request for ListStarredFilesRequest<'_> {
     const URI: &'static str = "/adrive/v1.0/openFile/starredList";
     const METHOD: reqwest::Method = Method::POST;
-    type Response = GetFileListResponse;
+    type Response = ListFilesResponse;
 }
 
 #[derive(Debug, Serialize, Default)]
-pub struct GetFileDetailByIdRequest<'a> {
+pub struct GetFileByIdRequest<'a> {
     drive_id: &'a str,
     file_id: &'a str,
     video_thumbnail_time: Option<u32>,
@@ -223,7 +219,7 @@ pub struct GetFileDetailByIdRequest<'a> {
     fields: Option<&'a str>, // *
 }
 
-impl<'a> GetFileDetailByIdRequest<'a> {
+impl<'a> GetFileByIdRequest<'a> {
     pub fn new(drive_id: &'a str, file_id: &'a str) -> Self {
         Self {
             drive_id,
@@ -233,19 +229,19 @@ impl<'a> GetFileDetailByIdRequest<'a> {
     }
 }
 
-impl Request for GetFileDetailByIdRequest<'_> {
+impl Request for GetFileByIdRequest<'_> {
     const URI: &'static str = "/adrive/v1.0/openFile/get";
     const METHOD: reqwest::Method = Method::POST;
     type Response = FileEntry;
 }
 
 #[derive(Debug, Serialize, Default)]
-pub struct GetFileDetailByPathRequest<'a> {
+pub struct GetFileByPathRequest<'a> {
     drive_id: &'a str,
     file_path: &'a str,
 }
 
-impl<'a> GetFileDetailByPathRequest<'a> {
+impl<'a> GetFileByPathRequest<'a> {
     pub fn new(drive_id: &'a str, file_path: &'a str) -> Self {
         Self {
             drive_id,
@@ -254,25 +250,25 @@ impl<'a> GetFileDetailByPathRequest<'a> {
     }
 }
 
-impl Request for GetFileDetailByPathRequest<'_> {
+impl Request for GetFileByPathRequest<'_> {
     const URI: &'static str = "/adrive/v1.0/openFile/get_by_path";
     const METHOD: reqwest::Method = Method::POST;
     type Response = FileEntry;
 }
 
 #[derive(Debug, Serialize, Default)]
-pub struct BatchGetFileDetailByIdRequest<'a> {
-    pub file_list: Vec<GetFileDetailByIdRequest<'a>>,
+pub struct BatchGetFilesRequest<'a> {
+    pub file_list: Vec<GetFileByIdRequest<'a>>,
     pub video_thumbnail_time: Option<u32>,
     pub video_thumbnail_width: Option<u32>,
     pub image_thumbnail_width: Option<u32>,
 }
 
-impl<'a> BatchGetFileDetailByIdRequest<'a> {
+impl<'a> BatchGetFilesRequest<'a> {
     pub fn new(drive_id: &'a str, file_ids: &[&'a str]) -> Self {
         let file_list = file_ids
             .iter()
-            .map(|file_id| GetFileDetailByIdRequest::new(drive_id, file_id))
+            .map(|file_id| GetFileByIdRequest::new(drive_id, file_id))
             .collect();
         Self {
             file_list,
@@ -280,25 +276,20 @@ impl<'a> BatchGetFileDetailByIdRequest<'a> {
         }
     }
 }
-impl Request for BatchGetFileDetailByIdRequest<'_> {
+impl Request for BatchGetFilesRequest<'_> {
     const URI: &'static str = "/adrive/v1.0/openFile/batch/get";
     const METHOD: reqwest::Method = Method::POST;
-    type Response = GetFileListResponse;
-}
-
-#[derive(Debug, Deserialize)]
-pub struct BatchGetFileDetailByIdResponse {
-    pub items: Vec<FileEntry>,
+    type Response = ListFilesResponse;
 }
 
 #[derive(Debug, Serialize, Default)]
-pub struct GetDownloadUrlByIdRequest<'a> {
+pub struct GetDownloadUrlRequest<'a> {
     drive_id: &'a str,
     file_id: &'a str,
     expire_sec: Option<u32>, // default 900s
 }
 
-impl<'a> GetDownloadUrlByIdRequest<'a> {
+impl<'a> GetDownloadUrlRequest<'a> {
     pub fn new(drive_id: &'a str, file_id: &'a str) -> Self {
         Self {
             drive_id,
@@ -308,14 +299,14 @@ impl<'a> GetDownloadUrlByIdRequest<'a> {
     }
 }
 
-impl Request for GetDownloadUrlByIdRequest<'_> {
+impl Request for GetDownloadUrlRequest<'_> {
     const URI: &'static str = "/adrive/v1.0/openFile/getDownloadUrl";
     const METHOD: reqwest::Method = Method::POST;
-    type Response = GetDownloadUrlByIdResponse;
+    type Response = GetDownloadUrlResponse;
 }
 
 #[derive(Debug, Deserialize)]
-pub struct GetDownloadUrlByIdResponse {
+pub struct GetDownloadUrlResponse {
     pub url: String,
     pub expiration: String,
     pub method: String,

@@ -64,9 +64,9 @@ async fn test_file() -> Result<()> {
     println!("{:#?}", resp);
 
     let file_id = "62e89bd3b9d6ab9196c949a8b6a0f63a4dc22857";
-    let resp = adrive_api.starred_file(&drive_id, file_id).await?;
+    let resp = adrive_api.star_file(&drive_id, file_id).await?;
     println!("{:#?}", resp);
-    let resp = adrive_api.unstarred_file(&drive_id, file_id).await?;
+    let resp = adrive_api.unstar_file(&drive_id, file_id).await?;
     println!("{:#?}", resp);
 
     let file_id = "65ab71583bc7891eebd6491b8c1d67b0c450c306";

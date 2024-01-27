@@ -1,17 +1,15 @@
 use crate::data::{
-    AsyncTaskResponse, BatchGetFileDetailByIdRequest, CompleteUploadRequest, CopyFileRequest,
+    AsyncTaskResponse, BatchGetFilesRequest, CompleteUploadRequest, CopyFileRequest,
     CreateFileRequest, CreateFileResponse, DeleteFileRequest, DownloadFileRequest, FileEntry,
-    FileSearchingRequest, FileSearchingResponse, FileType, FlushUploadUrlRequest,
-    FlushUploadUrlResponse, GetAccessTokenResponse, GetAsyncTaskStateRequest,
-    GetAsyncTaskStateResponse, GetDownloadUrlByIdRequest, GetDownloadUrlByIdResponse,
-    GetDriveInfoRequest, GetDriveInfoResponse, GetFileDetailByIdRequest,
-    GetFileDetailByPathRequest, GetFileListRequest, GetFileListResponse, GetFileStarredListRequest,
-    GetSpaceInfoRequest, GetSpaceInfoResponse, GetUserInfoRequest, GetUserInfoResponse,
-    IfNameExists, ListUploadedPartsRequest, ListUploadedPartsResponse, MoveFileRequest, OrderBy,
-    PartInfo, RecycleFileRequest, Request, SortBy, UpdateFileRequest,
+    FileType, FlushUploadUrlRequest, FlushUploadUrlResponse, GetAccessTokenResponse,
+    GetAsyncTaskStateRequest, GetAsyncTaskStateResponse, GetDownloadUrlRequest,
+    GetDownloadUrlResponse, GetDriveInfoRequest, GetDriveInfoResponse, GetFileByIdRequest,
+    GetFileByPathRequest, GetSpaceInfoRequest, GetSpaceInfoResponse, GetUserInfoRequest,
+    GetUserInfoResponse, IfNameExists, ListFilesRequest, ListFilesResponse,
+    ListStarredFilesRequest, ListUploadedPartsRequest, ListUploadedPartsResponse, MoveFileRequest,
+    OrderBy, PartInfo, RecycleFileRequest, Request, SearchFilesRequest, SortBy, UpdateFileRequest,
 };
-use crate::utils;
-use crate::{auth, constants};
+use crate::{auth, constants, utils};
 
 use reqwest::header::HeaderMap;
 use std::io::{Read, Seek, SeekFrom};
@@ -71,9 +69,9 @@ impl ADriveCoreAPI {
         drive_id: &str,
         parent_file_id: &str,
         marker: Option<&str>,
-    ) -> Result<GetFileListResponse> {
+    ) -> Result<ListFilesResponse> {
         let token = self.auth.refresh_if_needed().await?;
-        let resp = GetFileListRequest::new(
+        let resp = ListFilesRequest::new(
             drive_id,
             parent_file_id,
             marker,
@@ -93,9 +91,9 @@ impl ADriveCoreAPI {
         query: &str,
         marker: Option<&str>,
         order_by: Option<&str>,
-    ) -> Result<FileSearchingResponse> {
+    ) -> Result<ListFilesResponse> {
         let token = self.auth.refresh_if_needed().await?;
-        let resp = FileSearchingRequest::new(drive_id, Some(query), marker, order_by)
+        let resp = SearchFilesRequest::new(drive_id, Some(query), marker, order_by)
             .dispatch(None, Some(&token.access_token))
             .await?;
         Ok(resp)
@@ -105,9 +103,9 @@ impl ADriveCoreAPI {
         &self,
         drive_id: &str,
         marker: Option<&str>,
-    ) -> Result<GetFileListResponse> {
+    ) -> Result<ListFilesResponse> {
         let token = self.auth.refresh_if_needed().await?;
-        let resp = GetFileStarredListRequest::new(drive_id, marker)
+        let resp = ListStarredFilesRequest::new(drive_id, marker)
             .dispatch(None, Some(&token.access_token))
             .await?;
         Ok(resp)
@@ -115,7 +113,7 @@ impl ADriveCoreAPI {
 
     pub async fn get_file_by_id(&self, drive_id: &str, file_id: &str) -> Result<FileEntry> {
         let token = self.auth.refresh_if_needed().await?;
-        let resp = GetFileDetailByIdRequest::new(drive_id, file_id)
+        let resp = GetFileByIdRequest::new(drive_id, file_id)
             .dispatch(None, Some(&token.access_token))
             .await?;
         Ok(resp)
@@ -123,7 +121,7 @@ impl ADriveCoreAPI {
 
     pub async fn get_file_by_path(&self, drive_id: &str, file_path: &str) -> Result<FileEntry> {
         let token = self.auth.refresh_if_needed().await?;
-        let resp = GetFileDetailByPathRequest::new(drive_id, file_path)
+        let resp = GetFileByPathRequest::new(drive_id, file_path)
             .dispatch(None, Some(&token.access_token))
             .await?;
         Ok(resp)
@@ -133,12 +131,12 @@ impl ADriveCoreAPI {
         &self,
         drive_id: &str,
         file_ids: &[&str],
-    ) -> Result<GetFileListResponse> {
+    ) -> Result<ListFilesResponse> {
         if file_ids.len() > constants::MAX_BATCH_SIZE {
             return Err("the max batch size should not exceed 100".into());
         }
         let token = self.auth.refresh_if_needed().await?;
-        BatchGetFileDetailByIdRequest::new(drive_id, file_ids)
+        BatchGetFilesRequest::new(drive_id, file_ids)
             .dispatch(None, Some(&token.access_token))
             .await
     }
@@ -147,9 +145,9 @@ impl ADriveCoreAPI {
         &self,
         drive_id: &str,
         file_id: &str,
-    ) -> Result<GetDownloadUrlByIdResponse> {
+    ) -> Result<GetDownloadUrlResponse> {
         let token = self.auth.refresh_if_needed().await?;
-        GetDownloadUrlByIdRequest::new(drive_id, file_id)
+        GetDownloadUrlRequest::new(drive_id, file_id)
             .dispatch(None, Some(&token.access_token))
             .await
     }

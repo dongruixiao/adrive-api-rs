@@ -81,7 +81,7 @@ impl From<&str> for QRCodeStatus {
             "ScanSuccess" => QRCodeStatus::ScanSuccess,
             "LoginSuccess" => QRCodeStatus::LoginSuccess,
             "QRCodeExpired" => QRCodeStatus::QRCodeExpired,
-            _ => todo!(),
+            _ => unimplemented!(),
         }
     }
 }

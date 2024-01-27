@@ -5,16 +5,16 @@ pub mod data;
 pub mod utils;
 
 pub use core::{ADriveCoreAPI, Result};
-use data::IfNameExists;
 pub use data::{
     CreateFileResponse, FileEntry, GetDriveInfoResponse as DriveInfo,
-    GetSpaceInfoResponse as SpaceInfo, GetUserInfoResponse as UserInfo, Request,
+    GetSpaceInfoResponse as SpaceInfo, GetUserInfoResponse as UserInfo, IfNameExists, Request,
 };
 use std::{
     fs,
     path::PathBuf,
     sync::{Arc, Mutex, OnceLock},
 };
+
 pub static TOKIO_RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 
 pub struct ADriveAPI {
@@ -277,13 +277,13 @@ impl ADriveAPI {
             .await
     }
 
-    pub async fn starred_file(&self, drive_id: &str, file_id: &str) -> Result<FileEntry> {
+    pub async fn star_file(&self, drive_id: &str, file_id: &str) -> Result<FileEntry> {
         self.inner
             .update_file(drive_id, file_id, None, None, Some(true))
             .await
     }
 
-    pub async fn unstarred_file(&self, drive_id: &str, file_id: &str) -> Result<FileEntry> {
+    pub async fn unstar_file(&self, drive_id: &str, file_id: &str) -> Result<FileEntry> {
         self.inner
             .update_file(drive_id, file_id, None, None, Some(false))
             .await
