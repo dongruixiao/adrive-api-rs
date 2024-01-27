@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod core;
 pub mod data;
+pub mod utils;
 
 pub use core::{ADriveCoreAPI, Result};
 use data::IfNameExists;

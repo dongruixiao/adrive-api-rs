@@ -1,22 +1,19 @@
-use base64::prelude::*;
-use reqwest::header::HeaderMap;
-use sha1_smol::Sha1;
-
+use crate::auth;
 use crate::data::{
     AsyncTaskResponse, BatchGetFileDetailByIdRequest, CompleteUploadRequest, CopyFileRequest,
     CreateFileRequest, CreateFileResponse, DeleteFileRequest, DownloadFileRequest, FileEntry,
-    FileSearchingRequest, FileSearchingResponse, FlushUploadUrlRequest, FlushUploadUrlResponse,
-    GetAsyncTaskStateRequest, GetAsyncTaskStateResponse, GetDownloadUrlByIdRequest,
-    GetDownloadUrlByIdResponse, GetDriveInfoRequest, GetDriveInfoResponse,
-    GetFileDetailByIdRequest, GetFileDetailByPathRequest, GetFileListRequest, GetFileListResponse,
-    GetFileStarredListRequest, GetSpaceInfoRequest, GetSpaceInfoResponse, GetUserInfoRequest,
-    GetUserInfoResponse, IfNameExists, ListUploadedPartsRequest, ListUploadedPartsResponse,
-    MoveFileRequest, OrderBy, PartInfo, RecycleFileRequest, Request, SortBy, UpdateFileRequest,
+    FileSearchingRequest, FileSearchingResponse, FileType, FlushUploadUrlRequest,
+    FlushUploadUrlResponse, GetAsyncTaskStateRequest, GetAsyncTaskStateResponse,
+    GetDownloadUrlByIdRequest, GetDownloadUrlByIdResponse, GetDriveInfoRequest,
+    GetDriveInfoResponse, GetFileDetailByIdRequest, GetFileDetailByPathRequest, GetFileListRequest,
+    GetFileListResponse, GetFileStarredListRequest, GetSpaceInfoRequest, GetSpaceInfoResponse,
+    GetUserInfoRequest, GetUserInfoResponse, IfNameExists, ListUploadedPartsRequest,
+    ListUploadedPartsResponse, MoveFileRequest, OrderBy, PartInfo, RecycleFileRequest, Request,
+    SortBy, UpdateFileRequest,
 };
+use crate::utils;
 
-use crate::auth;
-use crate::data::FileType;
-use std::cmp;
+use reqwest::header::HeaderMap;
 use std::io::{Read, Seek, SeekFrom};
 use std::os::unix::fs::MetadataExt;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -166,12 +163,6 @@ impl ADriveCoreAPI {
         })
     }
 
-    fn ensure_dirs(dir: &str) -> Result<PathBuf> {
-        fs::create_dir_all(dir)?;
-        let path = fs::canonicalize(dir)?;
-        Ok(path)
-    }
-
     pub async fn download_file_directly(
         &self,
         drive_id: &str,
@@ -182,10 +173,10 @@ impl ADriveCoreAPI {
         let token = self.auth.refresh_if_needed().await?;
         let url = self.get_download_url(drive_id, file_id).await?.url;
         let dst_path = if let Some(file_name) = file_name {
-            Self::ensure_dirs(target_dir)?.join(file_name)
+            utils::ensure_dirs(target_dir)?.join(file_name)
         } else {
             let file_name = self.get_file_by_id(drive_id, file_id).await?.name;
-            Self::ensure_dirs(target_dir)?.join(file_name)
+            utils::ensure_dirs(target_dir)?.join(file_name)
         };
         let bytes = DownloadFileRequest { url: &url }
             .get_original(None, Some(&token.access_token))
@@ -206,7 +197,7 @@ impl ADriveCoreAPI {
         let token = self.auth.refresh_if_needed().await?;
         let url = self.get_download_url(drive_id, file_id).await?.url;
         let detail = self.get_file_by_id(drive_id, file_id).await?;
-        let dst_path = Self::ensure_dirs(target_dir)?.join(file_name.unwrap_or(&detail.name));
+        let dst_path = utils::ensure_dirs(target_dir)?.join(file_name.unwrap_or(&detail.name));
 
         if dst_path.exists() {
             let mut file = fs::OpenOptions::new()
@@ -247,7 +238,7 @@ impl ADriveCoreAPI {
         let token = self.auth.refresh_if_needed().await?;
         let url = self.get_download_url(drive_id, file_id).await?.url;
         let detail = self.get_file_by_id(drive_id, file_id).await?;
-        let dst_path = Self::ensure_dirs(target_dir)?.join(file_name.unwrap_or(&detail.name));
+        let dst_path = utils::ensure_dirs(target_dir)?.join(file_name.unwrap_or(&detail.name));
 
         let file = Arc::new(Mutex::new(fs::File::create(&dst_path)?));
         let mut offset = 0_u64;
@@ -465,17 +456,6 @@ impl ADriveCoreAPI {
         .await
     }
 
-    pub fn get_pre_hash(file: &mut fs::File) -> Result<String> {
-        // TODO 1024?
-        file.seek(SeekFrom::Start(0))?;
-        let mut buffer = vec![0u8; 1024];
-        let count = file.read(&mut buffer)?;
-        let data = &buffer[..count];
-        let mut hasher = Sha1::new();
-        hasher.update(data);
-        Ok(hasher.hexdigest().to_uppercase())
-    }
-
     pub async fn check_pre_hash(
         &self,
         drive_id: &str,
@@ -501,40 +481,6 @@ impl ADriveCoreAPI {
         )
         .dispatch(None, Some(&token.access_token))
         .await
-    }
-
-    fn get_content_hash(file: &mut fs::File) -> Result<String> {
-        file.seek(SeekFrom::Start(0))?;
-        let mut hasher = Sha1::new();
-        let mut buffer = vec![0u8; 10 * 1024];
-        loop {
-            let count = file.read(&mut buffer)?;
-            if count == 0 {
-                break;
-            }
-            let data = &buffer[..count];
-            hasher.update(data);
-        }
-        Ok(hasher.hexdigest().to_uppercase())
-    }
-
-    fn get_proof_code(file: &mut fs::File, size: u64, token: &str) -> Result<String> {
-        file.seek(SeekFrom::Start(0))?;
-        if size <= 0 {
-            return Ok(String::from(""));
-        }
-        let digest = md5::compute(token);
-        let hex = format!("{:x}", digest);
-        let uint = u64::from_str_radix(&hex[..16], 16)?;
-
-        let start = uint % size;
-        let end = cmp::min(start + 8, size);
-
-        let mut buf = vec![0u8; (end - start) as usize];
-        file.seek(SeekFrom::Start(start))?;
-
-        file.read_exact(&mut buf)?;
-        Ok(BASE64_STANDARD.encode(&buf))
     }
 
     pub async fn check_content_hash(
@@ -584,7 +530,7 @@ impl ADriveCoreAPI {
     ) -> Result<()> {
         let file_size = file.metadata()?.size();
         let part_info_list = Self::create_part_info_list(file_size)?;
-        let pre_hash = Self::get_pre_hash(file)?;
+        let pre_hash = utils::get_pre_hash(file)?;
         let resp = self
             .check_pre_hash(
                 drive_id,
@@ -597,9 +543,9 @@ impl ADriveCoreAPI {
             .await?;
         if resp.pre_hash_matched() {
             println!("pre_hash_matched");
-            let content_hash = Self::get_content_hash(file)?;
+            let content_hash = utils::get_content_hash(file)?;
             let token = self.auth.refresh_if_needed().await?;
-            let proof_code = Self::get_proof_code(file, file_size, &token.access_token)?;
+            let proof_code = utils::get_proof_code(file, file_size, &token.access_token)?;
             let resp = self
                 .check_content_hash(
                     drive_id,
@@ -614,24 +560,10 @@ impl ADriveCoreAPI {
             if resp.content_hash_matched() {
                 println!("content_hash_matched");
                 println!("{:#?}", resp);
-                return Ok(());
+                Ok(())
             } else {
                 println!("content_hash_not_matched");
-                return self
-                    .multipart_upload_file(
-                        drive_id,
-                        parent_file_id,
-                        file_name,
-                        file_size,
-                        file,
-                        Some(resp),
-                    )
-                    .await;
-            }
-        } else {
-            println!("pre_hash_not_matched");
-            return self
-                .multipart_upload_file(
+                self.multipart_upload_file(
                     drive_id,
                     parent_file_id,
                     file_name,
@@ -639,7 +571,19 @@ impl ADriveCoreAPI {
                     file,
                     Some(resp),
                 )
-                .await;
+                .await
+            }
+        } else {
+            println!("pre_hash_not_matched");
+            self.multipart_upload_file(
+                drive_id,
+                parent_file_id,
+                file_name,
+                file_size,
+                file,
+                Some(resp),
+            )
+            .await
         }
     }
 

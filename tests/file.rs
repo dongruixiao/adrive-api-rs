@@ -58,7 +58,7 @@ async fn test_file() -> Result<()> {
 
     let parent_id: &str = "65abd292f867ee78856b4c1ba5db30af4b9213a6";
     let file_path = "./tmp/test.file2";
-    let resp = adrive_api
+    adrive_api
         .upload_file(&drive_id, parent_id, file_path)
         .await?;
     println!("{:#?}", resp);
