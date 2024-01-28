@@ -43,9 +43,14 @@ async fn refresh_token(payload: Json<GetAccessTokenRequest3>) -> Json<GetAccessT
     Json(resp)
 }
 
+async fn ping() {
+    ()
+}
+
 pub fn app() -> Router {
     Router::new()
         .route("/sid", get(sid))
         .route("/token", post(token))
         .route("/refresh_token", post(refresh_token))
+        .route("/ping", get(ping))
 }
