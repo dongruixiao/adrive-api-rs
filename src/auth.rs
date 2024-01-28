@@ -28,7 +28,7 @@ impl Auth {
         Ok(())
     }
 
-    pub fn load() -> crate::Result<GetAccessTokenResponse> {
+    fn load() -> crate::Result<GetAccessTokenResponse> {
         let file = fs::File::open(Self::path())?;
         let token: GetAccessTokenResponse = serde_json::from_reader(file)?;
         Ok(token)
@@ -69,7 +69,7 @@ impl Auth {
         Ok(())
     }
 
-    pub async fn refresh_token(&self) -> crate::Result<GetAccessTokenResponse> {
+    async fn refresh_token(&self) -> crate::Result<GetAccessTokenResponse> {
         let token = Self::load()?;
         let resp = GetAccessTokenRequest3 {
             refresh_token: token.refresh_token,

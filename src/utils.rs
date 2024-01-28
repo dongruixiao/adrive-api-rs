@@ -5,13 +5,13 @@ use std::{cmp, fs};
 use base64::prelude::*;
 use sha1_smol::Sha1;
 
-pub fn ensure_dirs(dir: &str) -> crate::Result<PathBuf> {
+pub(crate) fn ensure_dirs(dir: &str) -> crate::Result<PathBuf> {
     fs::create_dir_all(dir)?;
     let path = fs::canonicalize(dir)?;
     Ok(path)
 }
 
-pub fn get_proof_code(file: &mut fs::File, size: u64, token: &str) -> crate::Result<String> {
+pub(crate) fn get_proof_code(file: &mut fs::File, size: u64, token: &str) -> crate::Result<String> {
     file.seek(SeekFrom::Start(0))?;
     if size == 0 {
         return Ok(String::from(""));
@@ -30,7 +30,7 @@ pub fn get_proof_code(file: &mut fs::File, size: u64, token: &str) -> crate::Res
     Ok(BASE64_STANDARD.encode(&buf))
 }
 
-pub fn get_content_hash(file: &mut fs::File) -> crate::Result<String> {
+pub(crate) fn get_content_hash(file: &mut fs::File) -> crate::Result<String> {
     file.seek(SeekFrom::Start(0))?;
     let mut hasher = Sha1::new();
     let mut buffer = vec![0u8; 10 * 1024];
@@ -45,7 +45,7 @@ pub fn get_content_hash(file: &mut fs::File) -> crate::Result<String> {
     Ok(hasher.hexdigest().to_uppercase())
 }
 
-pub fn get_pre_hash(file: &mut fs::File) -> crate::Result<String> {
+pub(crate) fn get_pre_hash(file: &mut fs::File) -> crate::Result<String> {
     // TODO 1024?
     file.seek(SeekFrom::Start(0))?;
     let mut buffer = vec![0u8; 1024];

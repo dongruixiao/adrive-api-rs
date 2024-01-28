@@ -258,10 +258,10 @@ impl Request for GetFileByPathRequest<'_> {
 
 #[derive(Debug, Serialize, Default)]
 pub struct BatchGetFilesRequest<'a> {
-    pub file_list: Vec<GetFileByIdRequest<'a>>,
-    pub video_thumbnail_time: Option<u32>,
-    pub video_thumbnail_width: Option<u32>,
-    pub image_thumbnail_width: Option<u32>,
+    file_list: Vec<GetFileByIdRequest<'a>>,
+    video_thumbnail_time: Option<u32>,
+    video_thumbnail_width: Option<u32>,
+    image_thumbnail_width: Option<u32>,
 }
 
 impl<'a> BatchGetFilesRequest<'a> {
@@ -361,21 +361,21 @@ pub struct StreamsInfo {
 
 #[derive(Debug, Serialize, Default)]
 pub struct CreateFileRequest<'a> {
-    pub drive_id: &'a str,
-    pub parent_file_id: &'a str,
-    pub name: &'a str,
-    pub r#type: FileType,
-    pub check_name_mode: IfNameExists,
-    pub streams_info: Option<StreamsInfo>,
-    pub pre_hash: Option<&'a str>,
-    pub size: Option<u64>,
-    pub content_hash: Option<&'a str>,
-    pub content_hash_name: Option<&'a str>,
-    pub proof_code: Option<&'a str>,
-    pub proof_version: Option<&'a str>,
-    pub local_created_at: Option<&'a str>,
-    pub local_modified_at: Option<&'a str>,
-    pub part_info_list: Option<Vec<PartInfo>>,
+    drive_id: &'a str,
+    parent_file_id: &'a str,
+    name: &'a str,
+    r#type: FileType,
+    check_name_mode: IfNameExists,
+    streams_info: Option<StreamsInfo>,
+    pre_hash: Option<&'a str>,
+    size: Option<u64>,
+    content_hash: Option<&'a str>,
+    content_hash_name: Option<&'a str>,
+    proof_code: Option<&'a str>,
+    proof_version: Option<&'a str>,
+    local_created_at: Option<&'a str>,
+    local_modified_at: Option<&'a str>,
+    part_info_list: Option<Vec<PartInfo>>,
 }
 
 impl<'a> CreateFileRequest<'a> {
@@ -476,10 +476,10 @@ impl CreateFileResponse {
 
 #[derive(Debug, Serialize, Default)]
 pub struct FlushUploadUrlRequest<'a> {
-    pub drive_id: &'a str,
-    pub file_id: &'a str,
-    pub upload_id: &'a str,
-    pub part_info_list: Vec<PartInfo>,
+    drive_id: &'a str,
+    file_id: &'a str,
+    upload_id: &'a str,
+    part_info_list: Vec<PartInfo>,
 }
 
 impl<'a> FlushUploadUrlRequest<'a> {
@@ -521,10 +521,10 @@ pub struct FlushUploadUrlResponse {
 
 #[derive(Debug, Serialize, Default)]
 pub struct ListUploadedPartsRequest<'a> {
-    pub drive_id: &'a str,
-    pub file_id: &'a str,
-    pub upload_id: &'a str,
-    pub part_number_marker: Option<String>,
+    drive_id: &'a str,
+    file_id: &'a str,
+    upload_id: &'a str,
+    part_number_marker: Option<String>,
 }
 
 impl<'a> ListUploadedPartsRequest<'a> {
@@ -568,9 +568,9 @@ pub struct ListUploadedPartsResponse {
 
 #[derive(Debug, Serialize, Default)]
 pub struct CompleteUploadRequest<'a> {
-    pub drive_id: &'a str,
-    pub file_id: &'a str,
-    pub upload_id: &'a str,
+    drive_id: &'a str,
+    file_id: &'a str,
+    upload_id: &'a str,
 }
 
 impl<'a> CompleteUploadRequest<'a> {
@@ -591,11 +591,11 @@ impl Request for CompleteUploadRequest<'_> {
 
 #[derive(Debug, Serialize, Default)]
 pub struct UpdateFileRequest<'a> {
-    pub drive_id: &'a str,
-    pub file_id: &'a str,
-    pub name: Option<&'a str>,
-    pub check_name_mode: Option<IfNameExists>,
-    pub starred: Option<bool>,
+    drive_id: &'a str,
+    file_id: &'a str,
+    name: Option<&'a str>,
+    check_name_mode: Option<IfNameExists>,
+    starred: Option<bool>,
 }
 
 impl<'a> UpdateFileRequest<'a> {
@@ -624,11 +624,11 @@ impl Request for UpdateFileRequest<'_> {
 
 #[derive(Debug, Serialize, Default)]
 pub struct MoveFileRequest<'a> {
-    pub drive_id: &'a str,
-    pub file_id: &'a str,
-    pub to_parent_file_id: &'a str,
-    pub check_name_mode: Option<IfNameExists>,
-    pub new_name: Option<&'a str>,
+    drive_id: &'a str,
+    file_id: &'a str,
+    to_parent_file_id: &'a str,
+    check_name_mode: Option<IfNameExists>,
+    new_name: Option<&'a str>,
 }
 
 impl<'a> MoveFileRequest<'a> {
@@ -664,11 +664,11 @@ pub struct AsyncTaskResponse {
 
 #[derive(Debug, Serialize, Default)]
 pub struct CopyFileRequest<'a> {
-    pub drive_id: &'a str,
-    pub file_id: &'a str,
-    pub to_drive_id: Option<&'a str>,
-    pub to_parent_file_id: &'a str,
-    pub auto_rename: Option<bool>,
+    drive_id: &'a str,
+    file_id: &'a str,
+    to_drive_id: Option<&'a str>,
+    to_parent_file_id: &'a str,
+    auto_rename: Option<bool>,
 }
 
 impl<'a> CopyFileRequest<'a> {
@@ -691,8 +691,8 @@ impl Request for CopyFileRequest<'_> {
 
 #[derive(Debug, Serialize, Default)]
 pub struct RecycleFileRequest<'a> {
-    pub drive_id: &'a str,
-    pub file_id: &'a str,
+    drive_id: &'a str,
+    file_id: &'a str,
 }
 
 impl<'a> RecycleFileRequest<'a> {

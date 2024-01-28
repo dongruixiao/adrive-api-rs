@@ -8,7 +8,6 @@ async fn main() -> Result<()> {
 
     let parent_id: &str = "root";
     let file_path = "/path/to/file";
-    let resp = api.upload_file(&drive_id, parent_id, file_path).await?;
-    println!("{:#?}", resp);
+    api.upload_file(&drive_id, parent_id, file_path).await?;
     Ok(())
 }

@@ -1,4 +1,4 @@
-use adrive_api_rs::auth::Auth;
+use adrive_api_rs::Auth;
 
 #[tokio::main]
 async fn main() {

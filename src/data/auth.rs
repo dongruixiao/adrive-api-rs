@@ -1,9 +1,9 @@
-use super::Request;
+use crate::constants::SELF_HOSTING_SERVER;
+use crate::data::Request;
+
 use chrono::{DateTime, Utc};
 use reqwest::{Method, Url};
 use serde::{Deserialize, Serialize};
-
-const SELF_HOSTED_SERVER: &str = "https://adrive-sign-in.onrender.com";
 
 #[derive(Debug, Serialize)]
 pub struct GetQRCodeRequest<'a> {
@@ -177,7 +177,7 @@ pub struct GetAccessTokenResponse {
 pub struct GetQRCodeRequest2;
 
 impl Request for GetQRCodeRequest2 {
-    const DOMAIN: &'static str = SELF_HOSTED_SERVER;
+    const DOMAIN: &'static str = SELF_HOSTING_SERVER;
     const URI: &'static str = "/sid";
     const METHOD: Method = Method::GET;
     type Response = GetQRCodeResponse;
@@ -189,7 +189,7 @@ pub struct GetAccessTokenRequest2 {
 }
 
 impl Request for GetAccessTokenRequest2 {
-    const DOMAIN: &'static str = SELF_HOSTED_SERVER;
+    const DOMAIN: &'static str = SELF_HOSTING_SERVER;
     const URI: &'static str = "/token";
     const METHOD: Method = Method::POST;
     type Response = GetAccessTokenResponse;
@@ -201,7 +201,7 @@ pub struct GetAccessTokenRequest3 {
 }
 
 impl Request for GetAccessTokenRequest3 {
-    const DOMAIN: &'static str = SELF_HOSTED_SERVER;
+    const DOMAIN: &'static str = SELF_HOSTING_SERVER;
     const URI: &'static str = "/refresh_token";
     const METHOD: Method = Method::POST;
     type Response = GetAccessTokenResponse;

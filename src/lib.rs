@@ -1,21 +1,27 @@
-pub mod auth;
-pub mod constants;
-pub mod core;
-pub mod data;
-pub mod utils;
+#![allow(dead_code)]
+#![allow(clippy::too_many_arguments)]
 
+mod auth;
+mod constants;
+mod core;
+mod data;
+mod self_hosting;
+mod utils;
+
+pub use auth::Auth;
 pub use core::{ADriveCoreAPI, Result};
-pub use data::{
-    CreateFileResponse, FileEntry, GetDriveInfoResponse as DriveInfo,
-    GetSpaceInfoResponse as SpaceInfo, GetUserInfoResponse as UserInfo, IfNameExists, Request,
+use data::{
+    FileEntry, GetDriveInfoResponse as DriveInfo, GetSpaceInfoResponse as SpaceInfo,
+    GetUserInfoResponse as UserInfo, IfNameExists,
 };
+pub use self_hosting::app as self_hosting_app;
 use std::{
     fs,
     path::PathBuf,
     sync::{Arc, Mutex, OnceLock},
 };
 
-pub static TOKIO_RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+static TOKIO_RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 
 pub struct ADriveAPI {
     inner: ADriveCoreAPI,
@@ -253,10 +259,7 @@ impl ADriveAPI {
         name: &str,
     ) -> Result<String> {
         let resp = self.inner.create_folder(drive_id, parent_id, name).await?;
-        match resp {
-            CreateFileResponse::FileCreated { file_id, .. } => Ok(file_id),
-            _ => Err("create folder failed".into()),
-        }
+        Ok(resp.file_id())
     }
 
     pub async fn upload_file(

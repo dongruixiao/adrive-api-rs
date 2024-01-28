@@ -1,21 +1,21 @@
-pub mod auth;
-pub mod file;
-pub mod user;
-use crate::Result;
+mod auth;
+mod file;
+mod user;
+use crate::{constants, Result};
 use async_trait::async_trait;
-pub use auth::*;
-pub use file::*;
+pub(crate) use auth::*;
+pub(crate) use file::*;
 use reqwest::{header::HeaderMap, Client, Method, Url};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::sync::OnceLock;
-pub use user::*;
+pub(crate) use user::*;
 
-pub static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+pub(crate) static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
 #[async_trait]
-pub trait Request: Sized + Serialize {
-    const DOMAIN: &'static str = "https://openapi.alipan.com";
+pub(crate) trait Request: Sized + Serialize {
+    const DOMAIN: &'static str = constants::ADRIVE_OPENAPI_DOMAIN;
     const URI: &'static str;
     const METHOD: Method;
     type Response: DeserializeOwned;
