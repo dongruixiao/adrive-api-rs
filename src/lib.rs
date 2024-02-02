@@ -8,6 +8,7 @@ mod data;
 mod self_hosting;
 mod utils;
 
+use anyhow::anyhow;
 pub use auth::Auth;
 pub use core::{ADriveCoreAPI, Result};
 use data::{
@@ -270,7 +271,7 @@ impl ADriveAPI {
     ) -> Result<()> {
         let file_path = PathBuf::from(file_path);
         if file_path.is_dir() {
-            return Err("file_path is a directory".into());
+            return Err(anyhow!("file_path is a directory"));
         }
 
         let file_name = file_path.file_name().unwrap().to_str().unwrap();

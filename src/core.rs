@@ -11,13 +11,15 @@ use crate::data::{
 };
 use crate::{auth, constants, utils};
 
+use anyhow::{anyhow, ensure};
 use reqwest::header::HeaderMap;
 use std::io::{Read, Seek, SeekFrom};
 use std::os::unix::fs::MetadataExt;
 use std::sync::{Arc, Mutex, OnceLock};
-use std::{error, fs, io::Write, result};
+use std::{fs, io::Write};
 
-pub type Result<T> = result::Result<T, Box<dyn error::Error>>;
+pub type Result<T> = anyhow::Result<T>;
+
 pub static TOKIO_RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 
 pub struct ADriveCoreAPI {
@@ -133,7 +135,7 @@ impl ADriveCoreAPI {
         file_ids: &[&str],
     ) -> Result<ListFilesResponse> {
         if file_ids.len() > constants::MAX_BATCH_SIZE {
-            return Err("the max batch size should not exceed 100".into());
+            return Err(anyhow!("the max batch size should not exceed 100"));
         }
         let token = self.auth.refresh_if_needed().await?;
         BatchGetFilesRequest::new(drive_id, file_ids)
@@ -566,7 +568,10 @@ impl ADriveCoreAPI {
                 break;
             }
         }
-        assert!(uploaded.len() == part_info_list_with_upload_url.len());
+        ensure!(
+            uploaded.len() == part_info_list_with_upload_url.len(),
+            "part upload failed"
+        );
         let _ = self
             .complete_multipart_upload(drive_id, &file_id, &upload_id)
             .await?;
