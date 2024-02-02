@@ -1,10 +1,12 @@
 mod auth;
+mod error;
 mod file;
 mod user;
 use crate::{constants, Result};
 use async_trait::async_trait;
 pub(crate) use auth::*;
 pub(crate) use file::*;
+use reqwest::StatusCode;
 use reqwest::{header::HeaderMap, Client, Method, Url};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -36,6 +38,27 @@ pub(crate) trait Request: Sized + Serialize {
         }
     }
 
+    async fn raise_for_status(&self, resp: reqwest::Response) -> Result<Self::Response> {
+        match resp.error_for_status_ref() {
+            Ok(_) => Ok(resp.json::<Self::Response>().await?),
+            Err(err) => match err.status() {
+                Some(StatusCode::CONFLICT) => Ok(resp.json::<Self::Response>().await?),
+                Some(
+                    StatusCode::BAD_REQUEST
+                    | StatusCode::FORBIDDEN
+                    | StatusCode::NOT_FOUND
+                    | StatusCode::UNAUTHORIZED
+                    | StatusCode::TOO_MANY_REQUESTS,
+                ) => {
+                    let err = resp.json::<error::ErrorResponse>().await?;
+                    Err(err.into())
+                }
+                Some(_) => Err(err.into()),
+                None => Err(err.into()),
+            },
+        }
+    }
+
     async fn post(
         &self,
         headers: Option<HeaderMap>,
@@ -48,10 +71,8 @@ pub(crate) trait Request: Sized + Serialize {
             .headers(headers.unwrap_or_default())
             .json(&self)
             .send()
-            .await?
-            .json::<Self::Response>()
             .await?;
-        Ok(resp)
+        self.raise_for_status(resp).await
     }
 
     async fn get(&self, headers: Option<HeaderMap>, token: Option<&str>) -> Result<Self::Response> {
@@ -62,10 +83,8 @@ pub(crate) trait Request: Sized + Serialize {
             .headers(headers.unwrap_or_default())
             .form(&self)
             .send()
-            .await?
-            .json::<Self::Response>()
             .await?;
-        Ok(resp)
+        self.raise_for_status(resp).await
     }
 
     async fn get_original(
