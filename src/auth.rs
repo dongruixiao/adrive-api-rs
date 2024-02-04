@@ -4,6 +4,7 @@ use crate::data::{
 };
 use std::path::PathBuf;
 use std::{fs, thread, time};
+use tracing::info;
 
 use chrono::Utc;
 
@@ -36,20 +37,20 @@ impl Auth {
 
     pub async fn sign_in(&self) -> crate::Result<()> {
         let resp = GetQRCodeRequest2 {}.dispatch(None, None).await?;
-        println!("### 🌟 请打开网页并扫码：{:#?}", resp.qr_code_url);
+        info!("🌟 请打开网页并扫码：{:#?}", resp.qr_code_url);
         let auth_code = loop {
             let resp = GetQRCodeStatusRequest { sid: &resp.sid }
                 .dispatch(None, None)
                 .await?;
             match resp.status {
-                QRCodeStatus::WaitLogin => println!("### ⏳ 等待扫码登陆..."),
-                QRCodeStatus::ScanSuccess => println!("### 🆗 扫码成功，等待确认..."),
+                QRCodeStatus::WaitLogin => info!("⏳ 等待扫码登陆..."),
+                QRCodeStatus::ScanSuccess => info!("🆗 扫码成功，等待确认..."),
                 QRCodeStatus::LoginSuccess => {
-                    println!("### ✅ 登陆成功");
+                    info!("✅ 登陆成功");
                     break resp.auth_code;
                 }
                 QRCodeStatus::QRCodeExpired => {
-                    println!("### ⛔️ 二维码已过期");
+                    info!("⛔️ 二维码已过期");
                     break None;
                 }
             }
@@ -63,7 +64,7 @@ impl Auth {
         }
         .dispatch(None, None)
         .await?;
-        println!("### 👋");
+        info!("👋");
 
         self.dump(&resp)?;
         Ok(())
